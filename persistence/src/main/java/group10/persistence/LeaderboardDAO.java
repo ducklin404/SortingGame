@@ -1,4 +1,5 @@
 package group10.persistence;
+import group10.common.PlayerStat;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -7,7 +8,7 @@ import java.util.List;
 public class LeaderboardDAO {
 
     /**
-     * 📊 Lấy danh sách bảng xếp hạng (top 20 người chơi)
+     * Lấy danh sách bảng xếp hạng (top 20 người chơi)
      * Sắp xếp theo: tổng điểm giảm dần, sau đó theo số trận thắng giảm dần.
      */
     public List<PlayerStat> getLeaderboard() {
@@ -36,7 +37,7 @@ public class LeaderboardDAO {
             }
 
         } catch (SQLException e) {
-            System.err.println("❌ Lỗi khi lấy dữ liệu bảng xếp hạng:");
+            System.err.println("Lỗi khi lấy dữ liệu bảng xếp hạng:");
             e.printStackTrace();
         }
 

@@ -1,4 +1,5 @@
 package group10.persistence;
+import group10.common.PlayerStat;
 
 import java.util.List;
 

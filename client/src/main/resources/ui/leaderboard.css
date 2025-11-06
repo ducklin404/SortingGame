@@ -1,4 +1,4 @@
-/* 🎯 Tổng thể */
+/*  Tổng thể */
 .root {
     -fx-background-color: linear-gradient(to bottom, #0f0f0f, #1c1c1c);
     -fx-font-family: "Segoe UI Semibold";
@@ -6,7 +6,7 @@
     -fx-text-fill: #e8e8e8;
 }
 
-/* 🏆 Tiêu đề chính */
+/*  Tiêu đề chính */
 .label {
     -fx-text-fill: linear-gradient(to bottom, #00bfff, #00e6e6);
     -fx-font-size: 20px;
@@ -14,7 +14,7 @@
     -fx-effect: dropshadow(three-pass-box, rgba(0,255,255,0.4), 5, 0, 0, 0);
 }
 
-/* 🧱 TableView */
+/*  TableView */
 .table-view {
     -fx-background-color: #1e1e1e;
     -fx-table-cell-border-color: #2c2c2c;
@@ -23,7 +23,7 @@
     -fx-background-radius: 8px;
 }
 
-/* 🧩 Header - làm rõ và sang hơn */
+/*  Header - làm rõ và sang hơn */
 .table-view .column-header-background {
     -fx-background-color: linear-gradient(to bottom, #00334d, #001a26);
     -fx-border-color: #00ccff;
@@ -40,13 +40,13 @@
 }
 
 
-/* 📊 Ô dữ liệu */
+/*  Ô dữ liệu */
 .table-cell {
     -fx-text-fill: #ffffff; /* chữ trắng sáng */
     -fx-alignment: CENTER;
 }
 
-/* 🌈 Dòng xen kẽ */
+/*  Dòng xen kẽ */
 .table-row-cell:odd {
     -fx-background-color: #1c1c1c;
 }
@@ -54,13 +54,13 @@
     -fx-background-color: #242424;
 }
 
-/* 🔹 Dòng được chọn */
+/*  Dòng được chọn */
 .table-row-cell:selected {
     -fx-background-color: linear-gradient(to right, #0078ff, #00c3ff);
     -fx-text-fill: #ffffff;
 }
 
-/* 🔘 Nút bấm */
+/*  Nút bấm */
 .button {
     -fx-background-color: linear-gradient(to right, #0099ff, #00ccff);
     -fx-text-fill: white;
@@ -72,7 +72,7 @@
     -fx-background-color: linear-gradient(to right, #00ccff, #33ffff);
 }
 
-/* ⬅️➡️ Nút phân trang */
+/*  Nút phân trang */
 .pagination .button {
     -fx-background-color: #222;
     -fx-text-fill: #00ffff;

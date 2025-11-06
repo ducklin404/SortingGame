@@ -1,6 +1,8 @@
-package group10.persistence;
+package group10.common;
 
-public class PlayerStat {
+import java.io.Serializable;
+
+public class PlayerStat implements Serializable {
     private String username;
     private double totalPoints;
     private int wins;
@@ -17,7 +19,7 @@ public class PlayerStat {
         this.matchesPlayed = matchesPlayed;
     }
 
-    // 🧩 Getter & Setter
+    //  Getter & Setter
     public String getUsername() {
         return username;
     }
@@ -42,7 +44,7 @@ public class PlayerStat {
         return matchesPlayed;
     }
 
-    // ✅ Dễ debug hơn
+    //  Dễ debug hơn
     @Override
     public String toString() {
         return String.format("%s | %.2f điểm | %dW-%dL-%dD | %d trận",

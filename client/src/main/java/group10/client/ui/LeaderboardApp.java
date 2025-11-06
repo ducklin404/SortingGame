@@ -1,7 +1,7 @@
-package ui;
+package group10.client.ui;
 
-import group10.persistence.LeaderboardDAO;
-import group10.persistence.PlayerStat;
+import group10.client.network.ClientConnection;
+import group10.common.*;
 import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -14,7 +14,10 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class LeaderboardApp extends Application {
@@ -23,24 +26,31 @@ public class LeaderboardApp extends Application {
     private ObservableList<PlayerStat> data;
     private TableView<PlayerStat> table;
     private Pagination pagination;
+    private ClientConnection client;
 
     @Override
     public void start(Stage stage) {
         stage.setTitle("🏆 Bảng Xếp Hạng - Sorting Game");
 
-        LeaderboardDAO dao = new LeaderboardDAO();
-        data = FXCollections.observableArrayList(dao.getLeaderboard());
+        // ⚙️ Kết nối TCP tới server
+        client = new ClientConnection(Protocol.SERVER_HOST, Protocol.SERVER_PORT);
+        if (!client.connect()) {
+            showError("Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng hoặc khởi động server trước.");
+            return;
+        }
+
+        // Lấy dữ liệu ban đầu từ server
+        data = FXCollections.observableArrayList(fetchLeaderboard());
 
         table = new TableView<>();
         table.getStyleClass().add("leaderboard-table");
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY); // 👈 Thêm dòng này
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-
-        // ===== CỘT HẠNG =====
+        // ====== Cột hạng ======
         TableColumn<PlayerStat, Number> rankCol = new TableColumn<>("Hạng");
-        rankCol.setCellValueFactory(cellData ->
+        rankCol.setCellValueFactory(cd ->
                 javafx.beans.binding.Bindings.createIntegerBinding(() ->
-                        data.indexOf(cellData.getValue()) + 1
+                        data.indexOf(cd.getValue()) + 1
                 )
         );
         rankCol.setPrefWidth(70);
@@ -72,9 +82,9 @@ public class LeaderboardApp extends Application {
         pagination.setPageFactory(this::createPage);
         pagination.getStyleClass().add("custom-pagination");
 
-        Button updateButton = new Button("🔄 Cập nhật");
+        Button updateButton = new Button("Cập nhật");
         updateButton.getStyleClass().add("update-button");
-        updateButton.setOnAction(e -> refreshData(dao));
+        updateButton.setOnAction(e -> refreshData());
 
         Label titleLabel = new Label("🏆 BẢNG XẾP HẠNG NGƯỜI CHƠI 🏆");
         titleLabel.getStyleClass().add("title-label");
@@ -100,6 +110,46 @@ public class LeaderboardApp extends Application {
         stage.show();
     }
 
+    /**
+     * Gửi yêu cầu lấy BXH và nhận JSON từ server, parse thành List<PlayerStat>
+     */
+    private List<PlayerStat> fetchLeaderboard() {
+        List<PlayerStat> list = new ArrayList<>();
+        try {
+            client.sendMessage(new Message(MessageType.GET_LEADERBOARD, null));
+            Message response = client.receiveMessage();
+
+            if (response == null || response.getType() == MessageType.ERROR) {
+                System.err.println("⚠Lỗi khi nhận phản hồi từ server.");
+                return list;
+            }
+
+            // Parse JSON mảng
+            JSONArray arr = new JSONArray(response.getPayload().toString());
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.getJSONObject(i);
+                list.add(new PlayerStat(
+                        obj.getString("username"),
+                        obj.getDouble("totalPoints"),
+                        obj.getInt("wins"),
+                        obj.getInt("losses"),
+                        obj.getInt("draws"),
+                        obj.getInt("matchesPlayed")
+                ));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
+    private void refreshData() {
+        List<PlayerStat> newData = fetchLeaderboard();
+        data.setAll(newData);
+        pagination.setPageCount((int) Math.ceil((double) data.size() / ROWS_PER_PAGE));
+        pagination.setCurrentPageIndex(0);
+    }
+
     private BorderPane createPage(int pageIndex) {
         int fromIndex = pageIndex * ROWS_PER_PAGE;
         int toIndex = Math.min(fromIndex + ROWS_PER_PAGE, data.size());
@@ -107,11 +157,15 @@ public class LeaderboardApp extends Application {
         return new BorderPane(table);
     }
 
-    private void refreshData(LeaderboardDAO dao) {
-        List<PlayerStat> newData = dao.getLeaderboard();
-        data.setAll(newData);
-        pagination.setPageCount((int) Math.ceil((double) data.size() / ROWS_PER_PAGE));
-        pagination.setCurrentPageIndex(0);
+    private void showError(String msg) {
+        Alert alert = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
+        alert.setHeaderText("Lỗi");
+        alert.showAndWait();
+    }
+
+    @Override
+    public void stop() {
+        if (client != null) client.close();
     }
 
     public static void main(String[] args) {

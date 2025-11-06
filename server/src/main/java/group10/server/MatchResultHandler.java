@@ -37,7 +37,7 @@ public class MatchResultHandler {
                 updateOne(ps, conn, playerB, 5, 0, 0, 1);
             }
 
-            System.out.println("✅ Đã cập nhật kết quả trận: " + result);
+            System.out.println(" Đã cập nhật kết quả trận: " + result);
 
         } catch (Exception e) {
             e.printStackTrace();
