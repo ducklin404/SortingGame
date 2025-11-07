@@ -1,0 +1,2 @@
+.text-field, .password-field { -fx-pref-width: 280; }
+.button { -fx-padding: 8 12; -fx-font-weight: bold; }
