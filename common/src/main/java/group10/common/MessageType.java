@@ -17,6 +17,7 @@ public enum MessageType {
     /*  Mời & Ghép cặp */
     INVITE,             // Người chơi gửi lời mời thách đấu
     INVITE_RESPONSE,    // Người chơi phản hồi OK/REJECT
+    INVITE_EXPIRED,     // Server thông báo lời mời hết hạn
     MATCH_START,        // Server thông báo bắt đầu trận
     MATCH_END,          // Server thông báo kết thúc trận
 
@@ -36,5 +37,6 @@ public enum MessageType {
     /* ️ Báo lỗi / Thông báo hệ thống */
     ERROR,              // Server gửi lỗi (ví dụ: command không hợp lệ)
     INFO,               // Thông báo thông tin chung
+    PLAYER_DISCONNECTED,// Thông báo đối thủ rời trận
     DISCONNECT          // Ngắt kết nối
 }

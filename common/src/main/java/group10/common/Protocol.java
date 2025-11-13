@@ -21,6 +21,16 @@ public class Protocol {
     public static final String TERMINATOR = "\n";          // Dấu kết thúc mỗi message TCP
     public static final String CONTENT_TYPE = "application/json";
 
+    /*  Trạng thái lời mời/match */
+    public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_ACCEPTED = "ACCEPTED";
+    public static final String STATUS_REJECTED = "REJECTED";
+    public static final String STATUS_EXPIRED = "EXPIRED";
+
+    /*  Trạng thái phản hồi chung */
+    public static final String STATUS_SUCCESS = "SUCCESS";
+    public static final String STATUS_FAILURE = "FAILURE";
+
     /*  Các khóa JSON chuẩn (để thống nhất cách đóng gói dữ liệu) */
     public static final String KEY_TYPE = "type";
     public static final String KEY_PAYLOAD = "payload";

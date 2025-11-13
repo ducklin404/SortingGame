@@ -31,7 +31,7 @@ public class ClientConnection {
     public boolean connect() {
         try {
             socket = new Socket(host, port);
-            socket.setSoTimeout(Protocol.SOCKET_TIMEOUT);
+            socket.setSoTimeout(0);
             dis = new DataInputStream(socket.getInputStream());
             dos = new DataOutputStream(socket.getOutputStream());
 
@@ -78,10 +78,10 @@ public class ClientConnection {
             System.out.println("Nhận từ server: " + json);
             return Message.fromJson(json);
         } catch (EOFException e) {
-            System.err.println("Server đã đóng kết nối.");
+            return null;
+        } catch (java.net.SocketTimeoutException e) {
             return null;
         } catch (IOException e) {
-            System.err.println("Lỗi khi nhận dữ liệu: " + e.getMessage());
             return null;
         }
     }

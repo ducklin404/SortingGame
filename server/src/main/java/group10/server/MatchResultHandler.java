@@ -18,7 +18,7 @@ public class MatchResultHandler {
                         "last_updated = CURRENT_TIMESTAMP " +
                         "WHERE player_id = (SELECT id FROM players WHERE username = ?);";
 
-        try (Connection conn = Database.getConnection()) {
+        try (Connection conn = Database.getInstance().getConnection()) {
             PreparedStatement ps = conn.prepareStatement(sql);
 
             // Nếu A thắng

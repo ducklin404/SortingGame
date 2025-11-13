@@ -14,6 +14,12 @@ dependencies {
     // 🔗 Kết nối các module khác
     implementation(project(":common"))
     implementation(project(":persistence"))
+    implementation("org.slf4j:slf4j-api:2.0.13")
+    runtimeOnly("org.slf4j:slf4j-simple:2.0.13")
+    compileOnly("org.projectlombok:lombok:1.18.32")
+    annotationProcessor("org.projectlombok:lombok:1.18.32")
+    testCompileOnly("org.projectlombok:lombok:1.18.32")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.32")
 
     // 🧩 Thư viện hỗ trợ JSON cho trao đổi dữ liệu TCP
     implementation("com.google.code.gson:gson:2.10.1")

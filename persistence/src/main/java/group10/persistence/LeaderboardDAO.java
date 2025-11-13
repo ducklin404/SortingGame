@@ -21,7 +21,7 @@ public class LeaderboardDAO {
                 LIMIT 20;
                 """;
 
-        try (Connection conn = Database.getConnection();
+        try (Connection conn = Database.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
 

@@ -1,7 +1,9 @@
 package group10.common;
 
-import org.json.JSONObject;
 import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.Objects;
 
 /**
  * Lớp Message đại diện cho một gói tin JSON trao đổi giữa Client và Server.
@@ -10,8 +12,12 @@ import org.json.JSONArray;
  *   - payload: nội dung dữ liệu (String / JSON object / JSON array)
  */
 public class Message {
-    private MessageType type;
+    private final MessageType type;
     private Object payload;
+
+    public Message(MessageType type) {
+        this(type, new JSONObject());
+    }
 
     public Message(MessageType type, Object payload) {
         this.type = type;
@@ -24,6 +30,94 @@ public class Message {
 
     public Object getPayload() {
         return payload;
+    }
+
+    /**
+     * Gán thêm thuộc tính vào payload dạng JSON object.
+     * Trả về chính đối tượng Message để hỗ trợ chaining.
+     */
+    public Message put(String key, Object value) {
+        if (payload == null) {
+            payload = new JSONObject();
+        }
+
+        if (payload instanceof JSONObject jsonObject) {
+            jsonObject.put(key, value);
+            return this;
+        }
+
+        throw new IllegalStateException("Cannot add key/value to non-object payload");
+    }
+
+    public JSONObject getPayloadAsObject() {
+        if (payload == null) {
+            payload = new JSONObject();
+        }
+        if (payload instanceof JSONObject jsonObject) {
+            return jsonObject;
+        }
+        throw new IllegalStateException("Payload is not a JSON object");
+    }
+
+    public JSONArray getPayloadAsArray() {
+        if (payload instanceof JSONArray jsonArray) {
+            return jsonArray;
+        }
+        throw new IllegalStateException("Payload is not a JSON array");
+    }
+
+    public Object get(String key) {
+        JSONObject obj = getPayloadAsObject();
+        if (!obj.has(key) || obj.isNull(key)) {
+            throw new IllegalArgumentException("Key '" + key + "' is missing in payload for type " + type);
+        }
+        return obj.get(key);
+    }
+
+    public String getString(String key) {
+        return Objects.toString(get(key));
+    }
+
+    public String optString(String key) {
+        JSONObject obj = getPayloadAsObject();
+        return obj.has(key) && !obj.isNull(key) ? obj.optString(key, null) : null;
+    }
+
+    public int getInt(String key) {
+        JSONObject obj = getPayloadAsObject();
+        if (!obj.has(key) || obj.isNull(key)) {
+            throw new IllegalArgumentException("Key '" + key + "' is missing in payload for type " + type);
+        }
+        return obj.getInt(key);
+    }
+
+    public Integer optInt(String key) {
+        JSONObject obj = getPayloadAsObject();
+        return obj.has(key) && !obj.isNull(key) ? obj.getInt(key) : null;
+    }
+
+    public java.util.UUID optUUID(String key) {
+        String value = optString(key);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return java.util.UUID.fromString(value);
+    }
+
+    public long getLong(String key) {
+        JSONObject obj = getPayloadAsObject();
+        if (!obj.has(key) || obj.isNull(key)) {
+            throw new IllegalArgumentException("Key '" + key + "' is missing in payload for type " + type);
+        }
+        return obj.getLong(key);
+    }
+
+    public boolean getBoolean(String key) {
+        JSONObject obj = getPayloadAsObject();
+        if (!obj.has(key) || obj.isNull(key)) {
+            throw new IllegalArgumentException("Key '" + key + "' is missing in payload for type " + type);
+        }
+        return obj.getBoolean(key);
     }
 
     /**

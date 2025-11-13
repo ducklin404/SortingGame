@@ -14,6 +14,12 @@ repositories {
 dependencies {
     // 🎯 Chỉ phụ thuộc vào common (chia sẻ class PlayerStat, Message, v.v.)
     implementation(project(":common"))
+    implementation("org.slf4j:slf4j-api:2.0.13")
+    runtimeOnly("org.slf4j:slf4j-simple:2.0.13")
+    compileOnly("org.projectlombok:lombok:1.18.32")
+    annotationProcessor("org.projectlombok:lombok:1.18.32")
+    testCompileOnly("org.projectlombok:lombok:1.18.32")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.32")
 
     // 📦 Thư viện JavaFX
     implementation("org.openjfx:javafx-controls:21")
@@ -27,8 +33,7 @@ dependencies {
 }
 
 application {
-    // ⚡ Entry point chính của client
-    mainClass.set("group10.client.ui.LeaderboardApp")
+    mainClass.set("group10.client.ui.ClientApp")
 }
 
 javafx {
