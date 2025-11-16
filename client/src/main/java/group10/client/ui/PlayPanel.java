@@ -1,5 +1,6 @@
 package group10.client.ui;
 
+
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
@@ -50,6 +51,8 @@ public class PlayPanel extends JPanel {
 
         sendBtn.addActionListener(e -> handleSend());
     }
+
+
 
     private void initTop() {
         JPanel top = new JPanel(new GridLayout(1,3,8,8));

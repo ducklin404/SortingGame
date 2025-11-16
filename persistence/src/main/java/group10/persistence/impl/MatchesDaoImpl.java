@@ -13,7 +13,7 @@ public class MatchesDaoImpl implements MatchesDao {
 
     @Override
     public UUID createMatch(UUID playerA, UUID playerB) {
-        String insertMatch = "INSERT INTO matches(created_at, started_at) VALUES (now(), now()) RETURNING id";
+        String insertMatch = "INSERT INTO matches(created_at) VALUES (now()) RETURNING id";
         String insertPlayers = "INSERT INTO match_players(match_id, player_a, player_b) VALUES (?, ?, ?)";
         try (Connection c = ds.getConnection()) {
             c.setAutoCommit(false);

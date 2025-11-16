@@ -79,7 +79,7 @@ public class Main {
                 InviteHandlers.invite(sessionManager));
 
         handlers.put(ProtocolConstants.INVITE_RESPONSE,
-                InviteHandlers.inviteResponse(sessionManager, connectionRegistry));
+                InviteHandlers.inviteResponse(invitesDao, sessionManager, connectionRegistry));
 
 
         // Start ServerSocket accept loop

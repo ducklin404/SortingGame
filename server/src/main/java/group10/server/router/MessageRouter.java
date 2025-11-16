@@ -69,7 +69,7 @@ public class MessageRouter implements Runnable {
                     UUID sid = env.getSessionId();
                     if (sid == null || !sessionManager.isActive(sid)) {
 
-                        UUID ephemeralUser = UUID.randomUUID();
+                        UUID ephemeralUser = UUID.fromString("3169622e-885d-43ca-9685-9ecc7314f035");
                         UUID ephemeralSession = sessionManager.createSession(ephemeralUser);
                         // register mapping and attach to envelope so handlers see it
                         connectionRegistry.register(ephemeralSession, clientSocket);

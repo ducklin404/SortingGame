@@ -11,6 +11,12 @@ public class Envelope {
 
     public Envelope() {}
 
+    public Envelope(String type, JsonNode payload) {
+        this.type = type;
+        this.payload = payload;
+        this.sessionId = null;
+    }
+
     public Envelope(String type, JsonNode payload, UUID sessionId) {
         this.type = type;
         this.payload = payload;

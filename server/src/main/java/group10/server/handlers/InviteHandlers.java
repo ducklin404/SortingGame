@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import group10.common.dto.Envelope;
 import group10.common.net.LengthPrefixedIO;
 import group10.common.protocol.ProtocolConstants;
+import group10.persistence.dao.InvitesDao;
 import group10.server.net.ConnectionRegistry;
 import group10.common.util.JsonUtil;
 import group10.server.router.MessageHandler;
@@ -12,6 +13,7 @@ import group10.server.session.SessionManager;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Optional;
 import java.util.UUID;
 
 public class InviteHandlers {
@@ -41,7 +43,7 @@ public class InviteHandlers {
     }
 
 
-    public static MessageHandler inviteResponse(SessionManager sessionManager, ConnectionRegistry connectionRegistry) {
+    public static MessageHandler inviteResponse(InvitesDao invitesDao, SessionManager sessionManager, ConnectionRegistry connectionRegistry) {
         return (env, sock) -> {
             JsonNode p = env.getPayload();
             if (p == null || !p.has("inviteId") || !p.has("response")) {
@@ -52,20 +54,37 @@ public class InviteHandlers {
             UUID playerId = sessionManager.getUserId(env.getSessionId());
             UUID inviteId = UUID.fromString(p.get("inviteId").asText());
             String response = p.get("response").asText(); // "OK" or "REJECT"
+            Optional<InvitesDao.InviteRecord> invite = invitesDao.getInvite(inviteId);
+            System.out.println(playerId);
+            if (invite.isEmpty()){
+                sendError(sock,"No invite exist");
+                return;
+            }
 
-            // TODO:
-            // - validate invite exists
-            // - update invite status
-            // - notify the inviter
-            // For now we reply with a stub.
+            InvitesDao.InviteRecord record = invite.get();
+            System.out.println(record.getExpiresAt());
+            System.out.println(System.currentTimeMillis());
+            System.out.println(record.getExpiresAt() >= System.currentTimeMillis());
+            if (record.getExpiresAt() >= System.currentTimeMillis()){
+                if (response.equals("OK")){
+                    invitesDao.acceptInviteAtomically(inviteId);
+                }
+                else{
+                    invitesDao.rejectInvite(inviteId);
+                }
 
-            ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
-            payload.put("inviteId", inviteId.toString());
-            payload.put("playerId", playerId.toString());
-            payload.put("response", response);
 
-            Envelope resp = new Envelope("INVITE_RESPONSE_ACK", payload, env.getSessionId());
-            LengthPrefixedIO.writeObject(sock, resp);
+                ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
+                payload.put("inviteId", inviteId.toString());
+                payload.put("playerId", playerId.toString());
+                payload.put("response", response);
+
+                Envelope resp = new Envelope("INVITE_RESPONSE_ACK", payload, env.getSessionId());
+                LengthPrefixedIO.writeObject(sock, resp);
+            }
+
+
+
         };
     }
 
@@ -73,7 +92,7 @@ public class InviteHandlers {
         try {
             ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
             payload.put("error", code);
-            Envelope env = new Envelope("ERROR", payload, null);
+            Envelope env = new Envelope("ERROR", payload);
             LengthPrefixedIO.writeObject(sock, env);
         } catch (IOException ignored) {}
     }
