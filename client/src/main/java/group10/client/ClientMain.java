@@ -1,17 +1,34 @@
 package group10.client;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
+import group10.client.ui.ScreenManager;
+import group10.client.ui.MainMenuPanel;
+import group10.client.ui.PlayPanel;
+
+import javax.swing.*;
+
 public class ClientMain {
     public static void main(String[] args) {
-        //TIP Press <shortcut actionId="ShowIntentionActions"/> with your caret at the highlighted text
-        // to see how IntelliJ IDEA suggests fixing it.
-        System.out.print("Hello and welcome!");
+        SwingUtilities.invokeLater(() -> {
+            // top-level frame and the screen manager
+            JFrame frame = new JFrame("Sorting Match - Client");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setSize(1000, 620);
+            frame.setLocationRelativeTo(null);
 
-        for (int i = 1; i <= 5; i++) {
-            //TIP Press <shortcut actionId="Debug"/> to start debugging your code. We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint
-            // for you, but you can always add more by pressing <shortcut actionId="ToggleLineBreakpoint"/>.
-            System.out.println("i = " + i);
-        }
+            ScreenManager manager = new ScreenManager(frame);
+
+            // Create UI screens
+            MainMenuPanel mainMenu = new MainMenuPanel(manager);
+            PlayPanel playPanel = new PlayPanel(manager);
+
+            // Register screens
+            manager.registerScreen("main", mainMenu);
+            manager.registerScreen("play", playPanel);
+
+            // Show main menu
+            manager.show("main");
+
+            frame.setVisible(true);
+        });
     }
 }
