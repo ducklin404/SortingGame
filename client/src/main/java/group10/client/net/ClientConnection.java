@@ -54,6 +54,20 @@ public class ClientConnection {
         handlers.put(messageType, handler);
     }
 
+    public void onUi(String messageType, MessageHandler handler) {
+        handlers.put(messageType, (env, sock) -> {
+            // marshal to EDT
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                try {
+                    handler.handle(env, sock);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+        });
+    }
+
+
     // send any object that LengthPrefixedIO.writeObject can handle (Envelope is fine)
     public synchronized void sendEnvelope(Envelope env) throws IOException {
         if (sessionId != null && env.getSessionId() == null) env.setSessionId(sessionId);

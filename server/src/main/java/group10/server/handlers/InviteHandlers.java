@@ -4,8 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import group10.common.dto.Envelope;
 import group10.common.net.LengthPrefixedIO;
-import group10.common.protocol.ProtocolConstants;
 import group10.persistence.dao.InvitesDao;
+import group10.persistence.dao.PlayerDao;
+import group10.persistence.model.Player;
 import group10.server.net.ConnectionRegistry;
 import group10.common.util.JsonUtil;
 import group10.server.router.MessageHandler;
@@ -15,6 +16,8 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.Optional;
 import java.util.UUID;
+
+import static group10.common.protocol.ProtocolConstants.START_MATCH;
 
 public class InviteHandlers {
 
@@ -43,7 +46,7 @@ public class InviteHandlers {
     }
 
 
-    public static MessageHandler inviteResponse(InvitesDao invitesDao, SessionManager sessionManager, ConnectionRegistry connectionRegistry) {
+    public static MessageHandler inviteResponse(InvitesDao invitesDao, PlayerDao playerDao, SessionManager sessionManager, ConnectionRegistry connectionRegistry) {
         return (env, sock) -> {
             JsonNode p = env.getPayload();
             if (p == null || !p.has("inviteId") || !p.has("response")) {
@@ -67,20 +70,35 @@ public class InviteHandlers {
             System.out.println(record.getExpiresAt() >= System.currentTimeMillis());
             if (record.getExpiresAt() >= System.currentTimeMillis()){
                 if (response.equals("OK")){
+                    UUID fromPlayerId = record.getFromPlayerId();
+                    UUID toPlayerId = record.getToPlayerId();
+                    Player fromPlayer = playerDao.findById(fromPlayerId);
+                    Player toPlayer = playerDao.findById(toPlayerId);
+                    UUID fromSessionId = sessionManager.getLatestActiveSession(fromPlayerId).getId();
+                    UUID toSessionId = sessionManager.getLatestActiveSession(toPlayerId).getId();
+
                     invitesDao.acceptInviteAtomically(inviteId);
+                    ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
+                    payload.put("opponent", fromPlayer.getDisplayName());
+
+
+                    Envelope resp = new Envelope(START_MATCH, payload, fromSessionId);
+                    LengthPrefixedIO.writeObject(connectionRegistry.getSocket(toSessionId), resp);
+
+                    payload = JsonUtil.MAPPER.createObjectNode();
+                    payload.put("opponent", toPlayer.getDisplayName());
+
+
+                    resp = new Envelope(START_MATCH, payload, fromSessionId);
+                    LengthPrefixedIO.writeObject(connectionRegistry.getSocket(fromSessionId), resp);
+
                 }
                 else{
                     invitesDao.rejectInvite(inviteId);
                 }
 
 
-                ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
-                payload.put("inviteId", inviteId.toString());
-                payload.put("playerId", playerId.toString());
-                payload.put("response", response);
 
-                Envelope resp = new Envelope("INVITE_RESPONSE_ACK", payload, env.getSessionId());
-                LengthPrefixedIO.writeObject(sock, resp);
             }
 
 
@@ -96,4 +114,5 @@ public class InviteHandlers {
             LengthPrefixedIO.writeObject(sock, env);
         } catch (IOException ignored) {}
     }
+
 }

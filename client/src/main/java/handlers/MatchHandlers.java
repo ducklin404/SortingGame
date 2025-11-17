@@ -1,20 +1,44 @@
 package handlers;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import group10.common.dto.Envelope;
-import group10.common.net.LengthPrefixedIO;
+import group10.client.net.ClientConnection;
+import group10.client.net.MessageHandler;
+import group10.client.ui.ScreenManager;
+import group10.client.ui.WaitingPanel;
 import group10.common.util.JsonUtil;
 import group10.common.protocol.ProtocolConstants;
-import group10.client.net.MessageHandler;
 
+import javax.swing.*;
 import java.io.IOException;
-import java.net.Socket;
-import java.util.UUID;
 
 public class MatchHandlers {
-    public static MessageHandler test() {
+
+    public static MessageHandler startMatchHandler(ScreenManager manager, ClientConnection clientConnection) {
         return (env, sock) -> {
-            System.out.println(env.getPayload());
+            JsonNode payload = env.getPayload();
+            System.out.println(payload);
+            String opponent = payload != null && payload.has("opponent")
+                    ? payload.get("opponent").asText(null)
+                    : "opponent";
+
+            // UI: manager.show must be called on EDT; if you used ClientConnection.onUi when registering,
+            // this runs on EDT already. If not, wrap with SwingUtilities.invokeLater here.
+            JPanel screen = manager.getScreen("waiting");
+            if (screen instanceof WaitingPanel) {
+                ((WaitingPanel) screen).setOpponentName(opponent);
+            }
+            manager.show("waiting");
+
+            // ACK
+            ObjectNode ackPayload = JsonUtil.MAPPER.createObjectNode();
+            ackPayload.put("received", true);
+            try {
+                clientConnection.send(ProtocolConstants.START_MATCH_ACK, ackPayload);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         };
     }
+
 }

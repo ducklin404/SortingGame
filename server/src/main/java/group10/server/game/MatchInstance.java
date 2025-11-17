@@ -89,10 +89,10 @@ public class MatchInstance {
     }
 
     private void sendToPlayer(UUID playerId, Envelope env) {
-        Set<Socket> sockets = connRegistry.getSockets(playerId);
-        for (Socket s : sockets) {
-            try { LengthPrefixedIO.writeObject(s, env); } catch (Exception ignored) {}
-        }
+        Socket socket = connRegistry.getSocket(playerId);
+
+        try { LengthPrefixedIO.writeObject(socket, env); } catch (Exception ignored) {}
+
     }
 
     private void endMatch() {

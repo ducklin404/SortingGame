@@ -68,14 +68,11 @@ public class MessageRouter implements Runnable {
                 if (requiresAuth(env.getType())) {
                     UUID sid = env.getSessionId();
                     if (sid == null || !sessionManager.isActive(sid)) {
+                        sendError(ProtocolConstants.ERROR, "NOT_AUTHENTICATED");
+                        continue;
+                    }
 
-                        UUID ephemeralUser = UUID.fromString("3169622e-885d-43ca-9685-9ecc7314f035");
-                        UUID ephemeralSession = sessionManager.createSession(ephemeralUser);
-                        // register mapping and attach to envelope so handlers see it
-                        connectionRegistry.register(ephemeralSession, clientSocket);
-                        env.setSessionId(ephemeralSession);
-                        lastSeenSessionId = ephemeralSession;
-                    } else {
+                         else {
                         // touch heartbeat and register socket to session
                         sessionManager.touchHeartbeat(sid);
 
@@ -85,6 +82,7 @@ public class MessageRouter implements Runnable {
                     }
                 }
 
+                System.out.println(env.getType());
                 MessageHandler handler = handlers.get(env.getType());
                 if (handler == null) {
                     sendError(ProtocolConstants.ERROR, "UNKNOWN_TYPE");

@@ -5,26 +5,23 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-// map session id to socket
 public class ConnectionRegistry {
-    private final ConcurrentHashMap<UUID, Set<Socket>> map = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Socket> map = new ConcurrentHashMap<>();
 
     public void register(UUID sessionId, Socket socket) {
-        map.compute(sessionId, (k, s) -> {
-            if (s == null) s = ConcurrentHashMap.newKeySet();
-            s.add(socket);
-            return s;
-        });
+        map.put(sessionId, socket);
     }
 
     public void unregister(UUID sessionId, Socket socket) {
-        map.computeIfPresent(sessionId, (k, s) -> {
-            s.remove(socket);
-            return s.isEmpty() ? null : s;
-        });
+        map.remove(sessionId, socket);
     }
 
-    public Set<Socket> getSockets(UUID sessionId) {
-        return map.getOrDefault(sessionId, ConcurrentHashMap.newKeySet());
+    public boolean isEmpty() {
+        return map.isEmpty();
+    }
+
+    public Socket getSocket(UUID sessionId) {
+        return map.get(sessionId);
     }
 }
+

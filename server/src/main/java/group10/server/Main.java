@@ -5,6 +5,8 @@ import group10.common.dto.Envelope;
 import group10.common.util.JsonUtil;
 import group10.common.protocol.ProtocolConstants;
 import group10.common.net.LengthPrefixedIO;
+import group10.persistence.dao.PlayerDao;
+import group10.persistence.impl.*;
 import group10.server.router.MessageHandler;
 import group10.server.router.MessageRouter;
 import group10.server.session.SessionManager;
@@ -20,17 +22,8 @@ import java.util.concurrent.*;
 import io.github.cdimascio.dotenv.Dotenv;
 import javax.sql.DataSource;
 import group10.persistence.dao.MatchesDao;
-import group10.persistence.dao.PlayersDao;
 import group10.persistence.dao.SessionDao;
 import group10.persistence.dao.InvitesDao;
-import group10.persistence.dao.MatchesDao;
-
-import group10.persistence.impl.PlayersDaoImpl;
-import group10.persistence.impl.SessionDaoImpl;
-import group10.persistence.impl.InvitesDaoImpl;
-import group10.persistence.impl.MatchesDaoImpl;
-import group10.persistence.impl.DataSourceFactory;
-
 
 
 public class Main {
@@ -41,11 +34,11 @@ public class Main {
         // init db
         DataSource ds = DataSourceFactory.createFromEnv(dotenv);
 
-        PlayersDao playersDao = new PlayersDaoImpl(ds);
+        PlayerDao playerDao = new PlayerDaoImpl(ds);
         SessionDao sessionDao = new SessionDaoImpl(ds);
         InvitesDao invitesDao = new InvitesDaoImpl(ds);
         MatchesDao matchesDao = new MatchesDaoImpl(ds);
-
+        long timeoutMs = 60000;
 
 
         int port = 9000;
@@ -57,7 +50,7 @@ public class Main {
         ConnectionRegistry connectionRegistry = new ConnectionRegistry();
 
         // test session
-        SessionManager sessionManager = new SessionManager(TimeUnit.SECONDS.toMillis(45));
+        SessionManager sessionManager = new SessionManager(sessionDao, timeoutMs);
 
 
         Map<String, MessageHandler> handlers = new ConcurrentHashMap<>();
@@ -66,7 +59,16 @@ public class Main {
             // reply with PONG; use the same sessionId if present
             ObjectNode payload = JsonUtil.MAPPER.createObjectNode()
                     .put("ts", System.currentTimeMillis());
-            Envelope resp = new Envelope(ProtocolConstants.PONG, payload, env.getSessionId());
+            UUID ephemeralUser;
+            if (connectionRegistry.isEmpty()){
+                ephemeralUser = UUID.fromString("3169622e-885d-43ca-9685-9ecc7314f035");
+            }else{
+                ephemeralUser = UUID.fromString("3c17e4ef-59dc-44d7-b67d-481a5677573e");
+            }
+            UUID ephemeralSession = sessionManager.createSession(ephemeralUser);
+            // register mapping and attach to envelope so handlers see it
+            connectionRegistry.register(ephemeralSession, sock);
+            Envelope resp = new Envelope(ProtocolConstants.PONG, payload, ephemeralSession);
             try {
                 LengthPrefixedIO.writeObject(sock, resp);
             } catch (IOException e) {
@@ -79,7 +81,7 @@ public class Main {
                 InviteHandlers.invite(sessionManager));
 
         handlers.put(ProtocolConstants.INVITE_RESPONSE,
-                InviteHandlers.inviteResponse(invitesDao, sessionManager, connectionRegistry));
+                InviteHandlers.inviteResponse(invitesDao, playerDao, sessionManager, connectionRegistry));
 
 
         // Start ServerSocket accept loop
