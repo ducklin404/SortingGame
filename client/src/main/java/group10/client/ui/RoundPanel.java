@@ -44,7 +44,6 @@ public class RoundPanel extends JPanel {
     // submission controls
     private final JButton submitButton = new JButton("Submit");
     private final JLabel yourSubmissionLabel = new JLabel("Your submission: -");
-    private final JLabel opponentSubmissionLabel = new JLabel("Opponent submission: -");
 
     // bottom: score & message
     private final JLabel scoreLabel = new JLabel("Score A 0 - 0 B");
@@ -103,8 +102,6 @@ public class RoundPanel extends JPanel {
 
         control.add(yourSubmissionLabel);
         control.add(Box.createRigidArea(new Dimension(0,6)));
-        control.add(opponentSubmissionLabel);
-        control.add(Box.createVerticalGlue());
 
         center.add(control);
         add(center, BorderLayout.CENTER);
@@ -162,8 +159,6 @@ public class RoundPanel extends JPanel {
         }
 
         // submissions
-        updateSubmissionLabels(payload);
-
         int aPoints = payload.path("playerAPoint").asInt(0);
         int bPoints = payload.path("playerBPoint").asInt(0);
         scoreLabel.setText(String.format("Score A: %d    B: %d", aPoints, bPoints));
@@ -187,7 +182,7 @@ public class RoundPanel extends JPanel {
     public void onRoundFinished(JsonNode payload) {
         if (payload == null) return;
         messageArea.setText(payload.path("message").asText("Round finished"));
-        updateSubmissionLabels(payload);
+
         int aPoints = payload.path("playerAPoint").asInt(0);
         int bPoints = payload.path("playerBPoint").asInt(0);
         scoreLabel.setText(String.format("Score A: %d    B: %d", aPoints, bPoints));
@@ -195,12 +190,6 @@ public class RoundPanel extends JPanel {
         uiTimer.stop();
     }
 
-    private void updateSubmissionLabels(JsonNode payload) {
-        JsonNode aSub = payload.has("playerASubmission") ? payload.get("playerASubmission") : payload.get("playerASubmission");
-        JsonNode bSub = payload.has("playerBSubmission") ? payload.get("playerBSubmission") : payload.get("playerBSubmission");
-        yourSubmissionLabel.setText("Your submission: " + jsonNodeToString(aSub, true));
-        opponentSubmissionLabel.setText("Opponent submission: " + jsonNodeToString(bSub, true));
-    }
 
     private boolean hasPlayerSubmitted(JsonNode payload) {
         JsonNode aSub = payload.path("playerASubmission");

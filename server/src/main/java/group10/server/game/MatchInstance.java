@@ -78,6 +78,7 @@ public class MatchInstance {
         if (currentRound == 0){
             matchDao.startMatch(this.matchId);
         }
+
         currentRound++;
         if (currentRound > totalRounds) {
             endMatch();
@@ -277,6 +278,44 @@ public class MatchInstance {
 
 
     private void endMatch() {
-        // compute final, persist, broadcast MATCH_RESULT
+        String result;
+        long aTime = submissionsDao.getTotalElapsedTimeForPlayerInMatch(this.playerA, this.matchId, false, true);
+        long bTime = submissionsDao.getTotalElapsedTimeForPlayerInMatch(this.playerB, this.matchId, false, true);
+        if (this.playerAScore > this.playerBScore){
+            result = "A_WIN";
+        }else if (this.playerBScore > this.playerAScore){
+            result = "B_WIN";
+        }else{
+            if (aTime > bTime){
+                result = "A_WIN";
+            }else if (bTime > aTime){
+                result = "B_WIN";}
+            else{
+                result = "DRAW";
+            }
+        }
+        matchDao.finishMatch(this.matchId, result);
+        matchDao.updatePoints(this.matchId, this.playerAScore, this.playerBScore);
+        // build payload to send to both players
+        ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
+        payload.put("matchId", matchId.toString());
+        payload.put("result", result);
+        payload.put("playerAPoint", this.playerAScore);
+        payload.put("playerBPoint", this.playerBScore);
+        payload.put("playerATimeMs", aTime);
+        payload.put("playerBTimeMs", bTime);
+        // convenience human-readable seconds
+        payload.put("playerATimeSec", aTime / 1000.0);
+        payload.put("playerBTimeSec", bTime / 1000.0);
+        payload.put("message", "Match finished");
+
+        // envelope type: use an appropriate constant. If MATCH_FINISHED doesn't exist,
+        // replace with a string or an existing protocol constant.
+        String envelopeType = ProtocolConstants.MATCH_RESULT; // or "MATCH_FINISHED" if constant missing
+        Envelope env = new Envelope(envelopeType, payload, null);
+
+        // send to both players (sendToPlayer handles session/socket lookup)
+        sendToPlayer(playerA, env);
+        sendToPlayer(playerB, env);
     }
 }

@@ -114,9 +114,11 @@ public class MatchDaoImpl implements MatchDao {
             ps.setObject(2, matchId);
             return ps.executeUpdate() == 1;
         } catch (SQLException e) {
+            e.printStackTrace();
             throw new RuntimeException(e);
         }
     }
+
 
     @Override
     public boolean updatePoints(UUID matchId, int playerAPoints, int playerBPoints) {
@@ -128,6 +130,7 @@ public class MatchDaoImpl implements MatchDao {
             ps.setObject(3, matchId);
             return ps.executeUpdate() == 1;
         } catch (SQLException e) {
+            e.printStackTrace();
             throw new RuntimeException(e);
         }
     }

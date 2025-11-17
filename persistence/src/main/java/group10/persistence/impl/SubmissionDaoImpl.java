@@ -41,6 +41,29 @@ public class SubmissionDaoImpl implements SubmissionDao {
         }
     }
 
+
+    @Override
+    public long getTotalTimeForPlayerInMatch(UUID playerId, UUID matchId, boolean onlyCorrect) {
+        String sql = "SELECT SUM(time_ms) AS total_ms FROM submissions WHERE player_id = ? AND match_id = ?";
+        if (onlyCorrect) {
+            sql += " AND is_correct = TRUE";
+        }
+
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setObject(1, playerId);
+            ps.setObject(2, matchId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return 0L;
+                long total = rs.getLong("total_ms");
+                return rs.wasNull() ? 0L : total;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
     @Override
     public Submission findById(UUID submissionId) {
         String sql = "SELECT id, player_id, match_id, round_id, submission_payload, submitted_at, time_ms, is_correct, score FROM submissions WHERE id = ?";
@@ -73,6 +96,48 @@ public class SubmissionDaoImpl implements SubmissionDao {
             throw new RuntimeException(e);
         }
     }
+
+
+    @Override
+    public long getTotalElapsedTimeForPlayerInMatch(UUID playerId, UUID matchId, boolean onlyCorrect, boolean firstSubmissionPerRound) {
+        // Choose SQL based on firstSubmissionPerRound flag
+        final String sqlFirstPerRound =
+                "SELECT COALESCE(SUM((EXTRACT(EPOCH FROM (t.submitted_at - r.created_at)) * 1000))::bigint, 0) AS total_ms " +
+                        "FROM ( " +
+                        "  SELECT round_id, MIN(submitted_at) AS submitted_at " +
+                        "  FROM submissions " +
+                        "  WHERE player_id = ? AND match_id = ? " +
+                        (onlyCorrect ? " AND is_correct = TRUE " : "") +
+                        "  GROUP BY round_id " +
+                        ") t " +
+                        "JOIN rounds r ON t.round_id = r.id";
+
+        final String sqlAllSubs =
+                "SELECT COALESCE(SUM((EXTRACT(EPOCH FROM (s.submitted_at - r.created_at)) * 1000))::bigint, 0) AS total_ms " +
+                        "FROM submissions s " +
+                        "JOIN rounds r ON s.round_id = r.id " +
+                        "WHERE s.player_id = ? AND s.match_id = ? " +
+                        (onlyCorrect ? " AND s.is_correct = TRUE " : "");
+
+        final String sql = firstSubmissionPerRound ? sqlFirstPerRound : sqlAllSubs;
+
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setObject(1, playerId);
+            ps.setObject(2, matchId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return 0L;
+                long total = rs.getLong("total_ms");
+                return rs.wasNull() ? 0L : total;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
 
     @Override
     public List<Submission> listByMatchAndRound(UUID matchId, UUID roundId, int limit, int offset) {

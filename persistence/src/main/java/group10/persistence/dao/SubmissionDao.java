@@ -9,7 +9,7 @@ public interface SubmissionDao {
 
      // Create a submission. Returns generated submission id.
     UUID createSubmission(UUID playerId, UUID matchId, UUID roundId, String submissionPayload, Long timeMs);
-
+    long getTotalTimeForPlayerInMatch(UUID playerId, UUID matchId, boolean onlyCorrect);
     Submission findById(UUID submissionId);
 
 
@@ -20,9 +20,10 @@ public interface SubmissionDao {
 
     List<Submission> listByPlayer(UUID playerId, int limit, int offset);
 
-
     // Mark a submission correct and set its score. Returns true if updated.
     boolean markCorrectAndSetScore(UUID submissionId, boolean isCorrect, short score);
-
     boolean deleteSubmission(UUID submissionId);
+    long getTotalElapsedTimeForPlayerInMatch(UUID playerId, UUID matchId, boolean onlyCorrect, boolean firstSubmissionPerRound);
+
+
 }

@@ -74,7 +74,7 @@ public class ClientMain {
                     MatchHandlers.startMatchTimeoutHandler(manager));
             router.add(ProtocolConstants.START_ROUND, MatchHandlers.startRoundHandler(manager, roundPanel));
             router.add(ProtocolConstants.ROUND_RESULT, MatchHandlers.roundResultHandler(manager, roundPanel));
-
+            router.add(ProtocolConstants.MATCH_RESULT, MatchHandlers.matchFinishedHandler(manager, clientConnection));
             router.registerAll(clientConnection, true);
 
 
