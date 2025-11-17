@@ -41,4 +41,30 @@ public class MatchHandlers {
         };
     }
 
+    public static MessageHandler startMatchTimeoutHandler(ScreenManager manager) {
+        return (env, sock) -> {
+            // Make sure UI work runs on EDT. If you already register with onUi, this will run on EDT
+            // and invokeLater simply runs code immediately; it's safe either way.
+            SwingUtilities.invokeLater(() -> {
+                // show a tiny notification/dialog
+                JOptionPane.showMessageDialog(
+                        null,
+                        "Match cancelled (timeout).",
+                        "Match cancelled",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+
+                // return to main screen
+                try {
+                    WaitingPanel wp = (WaitingPanel) manager.getScreen("waiting");
+                    if (wp != null) wp.showTemporaryMessage("Match cancelled (timeout)", 2500);
+                    manager.show("main");
+                } catch (Exception e) {
+                    // defensive: if show throws, at least log it
+                    e.printStackTrace();
+                }
+            });
+        };
+    }
+
 }

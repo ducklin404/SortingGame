@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static group10.common.protocol.ProtocolConstants.START_MATCH;
+import static group10.common.protocol.ProtocolConstants.START_MATCH_TIMEOUT;
 
 public class InviteHandlers {
 
@@ -83,7 +84,7 @@ public class InviteHandlers {
                     payload.put("opponent", fromPlayer.getDisplayName());
 
 
-                    Envelope resp = new Envelope(START_MATCH, payload, fromSessionId);
+                    Envelope resp = new Envelope(START_MATCH, payload, toSessionId);
                     LengthPrefixedIO.writeObject(connectionRegistry.getSocket(toSessionId), resp);
 
                     payload = JsonUtil.MAPPER.createObjectNode();
@@ -97,7 +98,21 @@ public class InviteHandlers {
                         (mid, failedRecord) -> {
                             // callback when match failed to start (timeout).
                             if (failedRecord == null) {
-                                // notify both players perhaps
+                                ObjectNode tempPl = JsonUtil.MAPPER.createObjectNode();
+                                Envelope msg = new Envelope(START_MATCH_TIMEOUT, tempPl, toSessionId);
+                                try {
+                                    LengthPrefixedIO.writeObject(connectionRegistry.getSocket(toSessionId), msg);
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+
+                                msg = new Envelope(START_MATCH_TIMEOUT, tempPl, fromSessionId);
+                                try {
+                                    LengthPrefixedIO.writeObject(connectionRegistry.getSocket(fromSessionId), msg);
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+
                             }
                     });
                 }

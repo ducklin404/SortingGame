@@ -116,7 +116,6 @@ public class MatchManager {
 
                     // create and start the MatchInstance
                     MatchInstance inst = new MatchInstance(
-                            removed.matchId,
                             removed.playerAUserId,
                             removed.playerBUserId,
                             generator,

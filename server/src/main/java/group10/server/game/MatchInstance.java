@@ -28,6 +28,8 @@ public class MatchInstance {
     private final UUID matchId;
     private final UUID playerA;
     private final UUID playerB;
+    private int playerAScore = 0;
+    private int playerBScore = 0;
     private final RoundGenerator generator;
     private final RoundValidator validator;
     private final ConnectionRegistry connRegistry;
@@ -36,12 +38,11 @@ public class MatchInstance {
     private final RoundsDao roundsDao;
     private final SubmissionDao submissionsDao;
     private final MatchDao matchDao;
-    private UUID id;
 
     private short currentRound = 0;
     private final int totalRounds = GameRules.ROUND_COUNT;
 
-    public MatchInstance(UUID matchId, UUID a, UUID b,
+    public MatchInstance(UUID a, UUID b,
                          RoundGenerator generator,
                          RoundValidator validator,
                          ConnectionRegistry connRegistry,
@@ -50,7 +51,6 @@ public class MatchInstance {
                          RoundsDao roundsDao,
                          SubmissionDao submissionsDao,
                          MatchDao matchDao) {
-        this.matchId = matchId;
         this.playerA = a; this.playerB = b;
         this.generator = generator;
         this.validator = validator;
@@ -61,7 +61,7 @@ public class MatchInstance {
         this.submissionsDao = submissionsDao;
         this.matchDao = matchDao;
 
-        this.id = matchDao.createMatch(playerA, playerB);
+        this.matchId = matchDao.createMatch(playerA, playerB);
 
     }
 
@@ -69,7 +69,7 @@ public class MatchInstance {
 
     public void startNextRound() {
         if (currentRound == 0){
-            matchDao.startMatch(this.id);
+            matchDao.startMatch(this.matchId);
         }
         currentRound++;
         if (currentRound > totalRounds) {
@@ -79,7 +79,7 @@ public class MatchInstance {
         // generate payload
         ObjectNode payload = generator.generateLetterRound(15);
         // persist the round (roundsDao.insertRound returns roundId)
-        UUID roundId = roundsDao.createRound(this.id, currentRound, payload.toString(),
+        UUID roundId = roundsDao.createRound(this.matchId, currentRound, payload.toString(),
                 payload.get("order").asText(),
                 Instant.ofEpochMilli(System.currentTimeMillis() + GameRules.ROUND_TIME_MS));
         // Send START_ROUND to both players
@@ -90,6 +90,8 @@ public class MatchInstance {
         msg.set("items", payload.get("items"));
         msg.put("order", payload.get("order").asText());
         msg.put("deadlineTs", System.currentTimeMillis() + GameRules.ROUND_TIME_MS);
+        msg.put("playerAPoint", this.playerAScore);
+        msg.put("PlayerBPoint", this.playerBScore);
         Envelope env = new Envelope(ProtocolConstants.START_ROUND, msg, null);
         sendToPlayer(playerA, env);
         sendToPlayer(playerB, env);
@@ -111,6 +113,15 @@ public class MatchInstance {
         try { LengthPrefixedIO.writeObject(socket, env); } catch (Exception e) {e.printStackTrace();}
 
     }
+
+    private void addPointToPlayerA(int points) {
+        playerAScore += points;
+    }
+
+    private void addPointToPlayerB(int points) {
+        playerBScore += points;
+    }
+
 
     private void endMatch() {
         // compute final, persist, broadcast MATCH_RESULT

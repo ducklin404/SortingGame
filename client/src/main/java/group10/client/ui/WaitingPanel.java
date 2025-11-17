@@ -23,4 +23,20 @@ public class WaitingPanel extends JPanel {
     private String escapeHtml(String s) {
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
+
+    public void showTemporaryMessage(String msg, int ms) {
+        JLabel tmp = new JLabel(msg, SwingConstants.CENTER);
+        tmp.setOpaque(true);
+        tmp.setBorder(BorderFactory.createLineBorder(Color.DARK_GRAY));
+        tmp.setBackground(new Color(255, 255, 225));
+        add(tmp, BorderLayout.SOUTH);
+        revalidate();
+        repaint();
+        new javax.swing.Timer(ms, e -> {
+            remove(tmp);
+            revalidate();
+            repaint();
+            ((javax.swing.Timer)e.getSource()).stop();
+        }).start();
+    }
 }

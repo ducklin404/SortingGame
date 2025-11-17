@@ -57,7 +57,10 @@ public class ClientMain {
             ScreenManager manager = new ScreenManager(frame);
             router.add(ProtocolConstants.START_MATCH,
                     MatchHandlers.startMatchHandler(manager, clientConnection));
+            router.add(ProtocolConstants.START_MATCH_TIMEOUT,
+                    MatchHandlers.startMatchTimeoutHandler(manager));
             router.registerAll(clientConnection, true);
+
 
             // Create UI screens
             MainMenuPanel mainMenu = new MainMenuPanel(manager, clientConnection);
