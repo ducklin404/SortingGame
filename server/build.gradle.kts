@@ -14,6 +14,16 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    implementation(project(":common"))
+    implementation(project(":persistence"))
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
+    implementation("com.fasterxml.jackson.core:jackson-core:2.17.0")
+    implementation("com.fasterxml.jackson.core:jackson-annotations:2.17.0")
+    implementation("com.zaxxer:HikariCP:5.1.0")
+    implementation("org.postgresql:postgresql:42.7.2")
+    implementation("org.slf4j:slf4j-api:2.0.12")
+    runtimeOnly("org.slf4j:slf4j-simple:2.0.12")
+    implementation("io.github.cdimascio:dotenv-java:3.2.0")
 }
 
 tasks.test {
