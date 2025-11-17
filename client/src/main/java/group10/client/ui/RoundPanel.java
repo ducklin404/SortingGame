@@ -1,237 +1,319 @@
 package group10.client.ui;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import group10.client.net.ClientConnection;
 import group10.common.util.JsonUtil;
 import group10.common.protocol.ProtocolConstants;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.event.MouseInputAdapter;
 import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.IOException;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.JsonNode;
-
+/**
+ * RoundPanel with drag-and-drop reordering for arbitrary item strings.
+ * - Items are displayed in a JList that supports dragging to reorder.
+ * - Submission sends an array "submission" matching the list order.
+ * - Shows order type (ASC/DESC if provided) and countdown.
+ * - Accepts arbitrary item contents (not just single characters).
+ */
 public class RoundPanel extends JPanel {
+    private final ClientConnection connection;
+
     // header
-    private final JLabel playersLabel = new JLabel("", SwingConstants.CENTER);
-    private final JLabel roundLabel = new JLabel("", SwingConstants.CENTER);
-    private final JLabel timerLabel = new JLabel("", SwingConstants.CENTER);
+    private final JLabel roundLabel = new JLabel("Round: -");
+    private final JLabel orderLabel = new JLabel("Order: -");
+    private final JLabel deadlineLabel = new JLabel("Deadline: -");
 
-    // ordering UI
-    private final DefaultListModel<String> listModel = new DefaultListModel<>();
-    private final JList<String> itemsList = new JList<>(listModel);
-    private final JButton upButton = new JButton("Up");
-    private final JButton downButton = new JButton("Down");
+    // items list (drag-to-reorder)
+    private final DefaultListModel<String> itemsModel = new DefaultListModel<>();
+    private final JList<String> itemsList = new JList<>(itemsModel);
+
+    // submission controls
     private final JButton submitButton = new JButton("Submit");
+    private final JLabel yourSubmissionLabel = new JLabel("Your submission: -");
+    private final JLabel opponentSubmissionLabel = new JLabel("Opponent submission: -");
 
-    // waiting message after submit
-    private final JLabel waitingLabel = new JLabel("", SwingConstants.CENTER);
+    // bottom: score & message
+    private final JLabel scoreLabel = new JLabel("Score A 0 - 0 B");
+    private final JTextArea messageArea = new JTextArea();
 
-    private final ClientConnection clientConnection;
+    private volatile long deadlineTs = -1;
+    private javax.swing.Timer uiTimer;
+    private String currentMatchId = null;
+    private String currentRoundId = null;
 
-    // tracking
-    private String matchId;
-    private String roundId;
-    private Timer countdownTimer; // Swing timer
-    private long deadlineTs;
+    public RoundPanel(ClientConnection connection) {
+        this.connection = connection;
+        setLayout(new BorderLayout(10,10));
+        setBorder(new EmptyBorder(12,12,12,12));
 
-    public RoundPanel(ClientConnection clientConnection) {
-        this.clientConnection = clientConnection;
-        setLayout(new BorderLayout(8, 8));
-        JPanel header = new JPanel(new GridLayout(1, 3));
-        header.add(playersLabel);
-        header.add(roundLabel);
-        header.add(timerLabel);
-        add(header, BorderLayout.NORTH);
+        // top
+        JPanel top = new JPanel(new GridLayout(1,3,8,8));
+        roundLabel.setHorizontalAlignment(SwingConstants.LEFT);
+        orderLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        deadlineLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+        top.add(roundLabel);
+        top.add(orderLabel);
+        top.add(deadlineLabel);
+        add(top, BorderLayout.NORTH);
 
-        // center: list + up/down buttons
+        // center
+        JPanel center = new JPanel(new GridLayout(1,2,12,12));
+
+        // items panel
+        JPanel itemsPanel = new JPanel(new BorderLayout(6,6));
+        itemsPanel.setBorder(BorderFactory.createTitledBorder("Items (drag to reorder)"));
+        itemsList.setVisibleRowCount(10);
         itemsList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        itemsList.setDragEnabled(true);
+        itemsList.setDropMode(DropMode.INSERT);
+        itemsList.setTransferHandler(new ReorderListTransferHandler());
         JScrollPane scroll = new JScrollPane(itemsList);
+        itemsPanel.add(scroll, BorderLayout.CENTER);
 
-        JPanel controls = new JPanel(new BorderLayout());
-        JPanel arrows = new JPanel(new GridLayout(2, 1, 4, 4));
-        arrows.add(upButton);
-        arrows.add(downButton);
-        controls.add(arrows, BorderLayout.NORTH);
 
-        JPanel center = new JPanel(new BorderLayout(6,6));
-        center.add(scroll, BorderLayout.CENTER);
-        center.add(controls, BorderLayout.EAST);
+        center.add(itemsPanel);
 
+        // controls
+        JPanel control = new JPanel();
+        control.setLayout(new BoxLayout(control, BoxLayout.Y_AXIS));
+        control.setBorder(BorderFactory.createTitledBorder("Submission"));
+
+        JLabel hint = new JLabel("Drag items to the order you want, then press Submit.");
+        hint.setAlignmentX(LEFT_ALIGNMENT);
+        control.add(hint);
+        control.add(Box.createRigidArea(new Dimension(0,8)));
+
+        submitButton.setAlignmentX(LEFT_ALIGNMENT);
+        control.add(submitButton);
+        control.add(Box.createRigidArea(new Dimension(0,12)));
+
+        control.add(yourSubmissionLabel);
+        control.add(Box.createRigidArea(new Dimension(0,6)));
+        control.add(opponentSubmissionLabel);
+        control.add(Box.createVerticalGlue());
+
+        center.add(control);
         add(center, BorderLayout.CENTER);
 
-        // bottom: submit & waiting
-        JPanel bottom = new JPanel(new BorderLayout());
-        bottom.add(submitButton, BorderLayout.WEST);
-        bottom.add(waitingLabel, BorderLayout.CENTER);
+        // bottom
+        JPanel bottom = new JPanel(new BorderLayout(8,8));
+        bottom.setBorder(BorderFactory.createTitledBorder("Score / messages"));
+        scoreLabel.setFont(scoreLabel.getFont().deriveFont(Font.BOLD, 14f));
+        bottom.add(scoreLabel, BorderLayout.NORTH);
+
+        messageArea.setEditable(false);
+        messageArea.setRows(4);
+        messageArea.setLineWrap(true);
+        messageArea.setWrapStyleWord(true);
+        bottom.add(new JScrollPane(messageArea), BorderLayout.CENTER);
         add(bottom, BorderLayout.SOUTH);
 
-        // buttons
-        upButton.addActionListener(this::onUp);
-        downButton.addActionListener(this::onDown);
-        submitButton.addActionListener(this::onSubmit);
+        // actions
+        submitButton.addActionListener(e -> doSubmit());
 
-        // initial state
-        setIdleState();
-    }
-
-    private void setIdleState() {
-        playersLabel.setText("");
-        roundLabel.setText("");
-        timerLabel.setText("");
-        waitingLabel.setText("");
-        listModel.clear();
-        enableEditing(false);
-    }
-
-    private void enableEditing(boolean enabled) {
-        itemsList.setEnabled(enabled);
-        upButton.setEnabled(enabled);
-        downButton.setEnabled(enabled);
-        submitButton.setEnabled(enabled);
-    }
-
-    private void onUp(ActionEvent e) {
-        int idx = itemsList.getSelectedIndex();
-        if (idx > 0) {
-            String v = listModel.get(idx);
-            listModel.remove(idx);
-            listModel.add(idx - 1, v);
-            itemsList.setSelectedIndex(idx - 1);
-        }
-    }
-
-    private void onDown(ActionEvent e) {
-        int idx = itemsList.getSelectedIndex();
-        if (idx >= 0 && idx < listModel.getSize() - 1) {
-            String v = listModel.get(idx);
-            listModel.remove(idx);
-            listModel.add(idx + 1, v);
-            itemsList.setSelectedIndex(idx + 1);
-        }
-    }
-
-    private void onSubmit(ActionEvent e) {
-        // build order as a JSON array (server's validator expects an array)
-        ArrayNode orderArray = JsonUtil.MAPPER.createArrayNode();
-        StringBuilder orderString = new StringBuilder();
-        for (int i = 0; i < listModel.size(); i++) {
-            String item = listModel.get(i);
-            orderArray.add(item);
-            orderString.append(item);
-            if (i < listModel.size() - 1) orderString.append(","); // keep a compact string for persistence/compatibility
-        }
-
-        // disable editing & show waiting
-        enableEditing(false);
-        waitingLabel.setText("Submitted — waiting for opponent...");
-
-        // send payload
-        ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
-        payload.put("matchId", matchId);
-        payload.put("roundId", roundId);
-        // put the array under "order" so server can read it as ArrayNode
-        payload.set("order", orderArray);
-        // also include a string representation for older server code that may call asText()
-        payload.put("orderString", orderString.toString());
-        payload.put("timestamp", System.currentTimeMillis());
-
-        try {
-            clientConnection.send(ProtocolConstants.SUBMIT, payload);
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            // restore UI so player can retry if needed
-            waitingLabel.setText("Failed to submit. Try again.");
-            enableEditing(true);
-        }
-    }
-
-    /**
-     * Populate UI for a new incoming START_ROUND. Call on EDT.
-     * @param payload the START_ROUND payload as JsonNode
-     */
-    public void startRound(JsonNode payload) {
-        // cancel any prior timer
-        if (countdownTimer != null) {
-            countdownTimer.stop();
-            countdownTimer = null;
-        }
-
-        // parse fields
-        this.matchId = payload.path("matchId").asText();
-        this.roundId = payload.path("roundId").asText();
-        int roundNo = payload.path("round").asInt(-1);
-        this.deadlineTs = payload.path("deadlineTs").asLong(0);
-
-        // header: players & scores
-        int aPts = payload.path("playerAPoint").asInt(0);
-        int bPts = payload.path("PlayerBPoint").asInt(0);
-        // you may prefer to include player names in payload; if so, read them and show
-        // for now show points only
-        playersLabel.setText(String.format("Player A: %d    —    Player B: %d", aPts, bPts));
-        roundLabel.setText("Round " + roundNo);
-
-        // items array
-        listModel.clear();
-        JsonNode itemsNode = payload.path("items");
-        if (itemsNode.isArray()) {
-            for (JsonNode it : itemsNode) {
-                listModel.addElement(it.asText());
+        // enable drop by double-clicking an item to start drag (UX helpful on some systems)
+        itemsList.addMouseListener(new MouseInputAdapter() {
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    int idx = itemsList.locationToIndex(e.getPoint());
+                    if (idx >= 0) {
+                        itemsList.setSelectedIndex(idx);
+                        // start drag programmatically
+                        TransferHandler th = itemsList.getTransferHandler();
+                        th.exportAsDrag(itemsList, e, TransferHandler.MOVE);
+                    }
+                }
             }
-        }
+        });
 
-        // enable editing
-        waitingLabel.setText("");
-        enableEditing(true);
-
-        // start countdown (update every second)
-        countdownTimer = new Timer(250, evt -> updateTimer());
-        countdownTimer.setRepeats(true);
-        countdownTimer.start();
-        updateTimer();
+        uiTimer = new javax.swing.Timer(250, e -> updateCountdown());
+        uiTimer.setRepeats(true);
     }
 
-    private void updateTimer() {
-        long now = System.currentTimeMillis();
+    public void startRound(JsonNode payload) {
+        if (payload == null) return;
+        currentMatchId = payload.path("matchId").asText(null);
+        currentRoundId = payload.path("roundId").asText(null);
+        int r = payload.path("round").asInt(-1);
+        roundLabel.setText("Round: " + (r >= 0 ? r : "n/a"));
+
+        String orderType = payload.has("order") ? payload.path("order").asText("") : "";
+        orderLabel.setText("Order: " + (orderType.isEmpty() ? "(none)" : orderType));
+
+        // populate items (accept arbitrary strings)
+        itemsModel.clear();
+        if (payload.has("items") && payload.get("items").isArray()) {
+            ArrayNode arr = (ArrayNode) payload.get("items");
+            for (JsonNode n : arr) itemsModel.addElement(n.asText());
+        }
+
+        // submissions
+        updateSubmissionLabels(payload);
+
+        int aPoints = payload.path("playerAPoint").asInt(0);
+        int bPoints = payload.path("playerBPoint").asInt(0);
+        scoreLabel.setText(String.format("Score A: %d    B: %d", aPoints, bPoints));
+
+        messageArea.setText(payload.path("message").asText(""));
+
+        if (payload.has("deadlineTs") && payload.get("deadlineTs").canConvertToLong()) {
+            deadlineTs = payload.get("deadlineTs").asLong();
+            updateCountdown();
+            uiTimer.start();
+        } else {
+            deadlineTs = -1;
+            deadlineLabel.setText("Deadline: -");
+            uiTimer.stop();
+        }
+
+        boolean roundActive = deadlineTs <= 0 || Instant.now().toEpochMilli() < deadlineTs;
+        setControlsEnabled(roundActive && !hasPlayerSubmitted(payload));
+    }
+
+    public void onRoundFinished(JsonNode payload) {
+        if (payload == null) return;
+        messageArea.setText(payload.path("message").asText("Round finished"));
+        updateSubmissionLabels(payload);
+        int aPoints = payload.path("playerAPoint").asInt(0);
+        int bPoints = payload.path("playerBPoint").asInt(0);
+        scoreLabel.setText(String.format("Score A: %d    B: %d", aPoints, bPoints));
+        setControlsEnabled(false);
+        uiTimer.stop();
+    }
+
+    private void updateSubmissionLabels(JsonNode payload) {
+        JsonNode aSub = payload.has("playerASubmission") ? payload.get("playerASubmission") : payload.get("playerASubmission");
+        JsonNode bSub = payload.has("playerBSubmission") ? payload.get("playerBSubmission") : payload.get("playerBSubmission");
+        yourSubmissionLabel.setText("Your submission: " + jsonNodeToString(aSub, true));
+        opponentSubmissionLabel.setText("Opponent submission: " + jsonNodeToString(bSub, true));
+    }
+
+    private boolean hasPlayerSubmitted(JsonNode payload) {
+        JsonNode aSub = payload.path("playerASubmission");
+        if (aSub.isArray()) return aSub.size() > 0;
+        if (aSub.isTextual()) return !aSub.asText().trim().isEmpty();
+        return !aSub.isMissingNode() && !aSub.isNull();
+    }
+
+    private String jsonNodeToString(JsonNode n, boolean joinArrays) {
+        if (n == null || n.isMissingNode() || n.isNull()) return "-";
+        if (n.isTextual()) return n.asText();
+        if (n.isArray() && joinArrays) {
+            List<String> vals = new ArrayList<>();
+            for (JsonNode x : n) vals.add(x.asText());
+            return String.join(" , ", vals);
+        }
+        return n.toString();
+    }
+
+    private void setControlsEnabled(boolean enabled) {
+        submitButton.setEnabled(enabled);
+        if (!enabled) submitButton.setText("Submit (disabled)");
+        else submitButton.setText("Submit");
+        itemsList.setEnabled(enabled);
+    }
+
+    private void updateCountdown() {
+        if (deadlineTs <= 0) {
+            deadlineLabel.setText("Deadline: -");
+            return;
+        }
+        long now = Instant.now().toEpochMilli();
         long remaining = deadlineTs - now;
         if (remaining <= 0) {
-            timerLabel.setText("Time: 0s");
-            if (countdownTimer != null) {
-                countdownTimer.stop();
-                countdownTimer = null;
-            }
-            // client does not auto-submit here; server will treat missing submit as timeout.
-            enableEditing(false);
-            waitingLabel.setText("Time up — waiting for results...");
-        } else {
-            timerLabel.setText(String.format("Time: %d s", (remaining + 500) / 1000));
+            deadlineLabel.setText("Deadline: expired");
+            setControlsEnabled(false);
+            uiTimer.stop();
+            return;
+        }
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
+        String abs = fmt.format(Instant.ofEpochMilli(deadlineTs));
+        String rel = String.format("%d s", (remaining + 500)/1000);
+        deadlineLabel.setText("Deadline: " + abs + " (in " + rel + ")");
+    }
+
+    private void doSubmit() {
+        if (currentMatchId == null || currentRoundId == null) {
+            JOptionPane.showMessageDialog(this, "No active round to submit to", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        // build array from list order
+        ArrayNode outArr = JsonUtil.MAPPER.createArrayNode();
+        for (int i = 0; i < itemsModel.size(); i++) outArr.add(itemsModel.get(i));
+
+        ObjectNode out = JsonUtil.MAPPER.createObjectNode();
+        out.put("matchId", currentMatchId);
+        out.put("roundId", currentRoundId);
+        out.set("submission", outArr);
+
+        try {
+            connection.send(ProtocolConstants.SUBMIT, out);
+            yourSubmissionLabel.setText("Your submission: " + jsonNodeToString(outArr, true));
+            setControlsEnabled(false);
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Failed to send submission: " + ex.getMessage(), "Network error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    /**
-     * Called when round result / cancel arrives. Run on EDT.
-     */
-    public void onRoundFinished(JsonNode resultPayload) {
-        // Example: update header scores from resultPayload
-        int aPts = resultPayload.path("playerAPoint").asInt(0);
-        int bPts = resultPayload.path("PlayerBPoint").asInt(0);
-        playersLabel.setText(String.format("Player A: %d    —    Player B: %d", aPts, bPts));
+    // TransferHandler to reorder items inside JList via drag and drop (MOVE)
+    private class ReorderListTransferHandler extends TransferHandler {
+        private final DataFlavor localObjectFlavor = new DataFlavor(String.class, "String");
+        private int sourceIndex = -1;
 
-        // show a short message (modal or toast). We'll use JOptionPane here:
-        String msg = resultPayload.path("message").asText("Round finished");
-        JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(this),
-                msg, "Round finished", JOptionPane.INFORMATION_MESSAGE);
-
-        // stop timer if still running
-        if (countdownTimer != null) {
-            countdownTimer.stop();
-            countdownTimer = null;
+        public int getSourceActions(JComponent c) {
+            return MOVE;
         }
 
-        // clear UI or leave final arrangement visible, then later server will issue next START_ROUND
-        enableEditing(false);
-        waitingLabel.setText("Round finished.");
+        protected Transferable createTransferable(JComponent c) {
+            sourceIndex = itemsList.getSelectedIndex();
+            final String val = itemsList.getSelectedValue();
+            return new Transferable() {
+                public Object getTransferData(DataFlavor flavor) { return val; }
+                public DataFlavor[] getTransferDataFlavors() { return new DataFlavor[] { localObjectFlavor }; }
+                public boolean isDataFlavorSupported(DataFlavor flavor) { return localObjectFlavor.equals(flavor); }
+            };
+        }
+
+        public boolean canImport(TransferHandler.TransferSupport info) {
+            return info.isDrop() && info.isDataFlavorSupported(localObjectFlavor);
+        }
+
+        public boolean importData(TransferHandler.TransferSupport info) {
+            if (!canImport(info)) return false;
+            JList.DropLocation dl = (JList.DropLocation) info.getDropLocation();
+            int index = dl.getIndex();
+            try {
+                String data = (String) info.getTransferable().getTransferData(localObjectFlavor);
+                if (sourceIndex < 0) return false;
+                // adjust index when removing earlier element
+                if (index > sourceIndex) index--;
+                itemsModel.remove(sourceIndex);
+                itemsModel.add(index, data);
+                itemsList.setSelectedIndex(index);
+                return true;
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                return false;
+            }
+        }
+
+        protected void exportDone(JComponent c, Transferable t, int action) {
+            sourceIndex = -1;
+        }
     }
 }

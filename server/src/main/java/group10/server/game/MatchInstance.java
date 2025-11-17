@@ -98,7 +98,7 @@ public class MatchInstance {
         msg.put("order", payload.get("order").asText());
         msg.put("deadlineTs", System.currentTimeMillis() + GameRules.ROUND_TIME_MS);
         msg.put("playerAPoint", this.playerAScore);
-        msg.put("PlayerBPoint", this.playerBScore);
+        msg.put("playerBPoint", this.playerBScore);
         Envelope env = new Envelope(ProtocolConstants.START_ROUND, msg, null);
         sendToPlayer(playerA, env);
         sendToPlayer(playerB, env);
@@ -139,8 +139,8 @@ public class MatchInstance {
         try {
             System.out.println("payload");
             System.out.println(payload);
-            System.out.println(payload.path("order").toString());
-            submissionsDao.createSubmission(playerId, matchId, roundId, payload.path("order").toString(), ts);
+            System.out.println(payload.path("submission").toString());
+            submissionsDao.createSubmission(playerId, matchId, roundId, payload.path("submission").toString(), ts);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -231,8 +231,8 @@ public class MatchInstance {
             result.put("matchId", matchId.toString());
             result.put("roundId", roundId.toString());
             result.put("round", currentRound);
-            result.put("playerASubmission", submissionAArray.toString());
-            result.put("playerBSubmission", submissionBArray.toString());
+            result.put("playerASubmission", submissionAArray);
+            result.put("playerBSubmission", submissionBArray);
             result.put("playerAPoint", playerAScore);
             result.put("playerBPoint", playerBScore); // consistent casing
             result.put("message", "Round finished");
