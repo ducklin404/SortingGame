@@ -81,4 +81,15 @@ public class MatchHandlers {
         };
     }
 
+    public static MessageHandler roundResultHandler(ScreenManager manager, RoundPanel roundPanel) {
+        return (env, sock) -> {
+            JsonNode payload = env.getPayload();
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                roundPanel.onRoundFinished(payload);
+                // optional: return to "waiting" screen, or stay on round screen until server sends next START_ROUND
+                // manager.show("waiting"); // if you want to show a waiting screen
+            });
+        };
+    }
+
 }

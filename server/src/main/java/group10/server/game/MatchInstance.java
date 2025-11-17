@@ -1,10 +1,12 @@
 package group10.server.game;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import group10.common.dto.Envelope;
 import group10.common.net.LengthPrefixedIO;
 import group10.common.protocol.ProtocolConstants;
 import group10.common.util.JsonUtil;
 import group10.persistence.dao.MatchDao;
+import group10.persistence.model.Submission;
 import group10.server.net.ConnectionRegistry;
 import group10.persistence.dao.RoundsDao;
 import group10.persistence.dao.SubmissionDao;
@@ -18,8 +20,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
  * Per-match instance that runs rounds. Keep it small and focused.
@@ -38,9 +39,13 @@ public class MatchInstance {
     private final RoundsDao roundsDao;
     private final SubmissionDao submissionsDao;
     private final MatchDao matchDao;
-
     private short currentRound = 0;
     private final int totalRounds = GameRules.ROUND_COUNT;
+    // track scheduled deadline future(s) so we can cancel when both submit
+    private final ConcurrentMap<UUID, ScheduledFuture<?>> roundDeadlines = new ConcurrentHashMap<>();
+
+    // in-memory submissions for fast check: roundId -> (sessionId -> submissionJson)
+    private final ConcurrentMap<UUID, ConcurrentMap<UUID, ObjectNode>> inMemorySubmissions = new ConcurrentHashMap<>();
 
     public MatchInstance(UUID a, UUID b,
                          RoundGenerator generator,
@@ -65,7 +70,9 @@ public class MatchInstance {
 
     }
 
-
+    public UUID getMatchId(){
+        return this.matchId;
+    }
 
     public void startNextRound() {
         if (currentRound == 0){
@@ -77,7 +84,7 @@ public class MatchInstance {
             return;
         }
         // generate payload
-        ObjectNode payload = generator.generateLetterRound(15);
+        ObjectNode payload = generator.generateLetterRound(5);
         // persist the round (roundsDao.insertRound returns roundId)
         UUID roundId = roundsDao.createRound(this.matchId, currentRound, payload.toString(),
                 payload.get("order").asText(),
@@ -97,14 +104,149 @@ public class MatchInstance {
         sendToPlayer(playerB, env);
 
         // schedule deadline handler
-        scheduler.schedule(() -> onRoundDeadline(roundId), GameRules.ROUND_TIME_MS, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> sf = scheduler.schedule(() -> onRoundDeadline(roundId), GameRules.ROUND_TIME_MS, TimeUnit.MILLISECONDS);
+        roundDeadlines.put(roundId, sf);
+    }
+    public class SubmissionRecord {
+        private final String payload;
+        private final long timestamp;
+
+        public SubmissionRecord(String payload, long timestamp) {
+            this.payload = payload;
+            this.timestamp = timestamp;
+        }
+
+        public String getPayload() { return payload; }
+        public long getTimestamp() { return timestamp; }
     }
 
     private void onRoundDeadline(UUID roundId) {
-        // fetch submissions, compute scores, broadcast ROUND_RESULT, then start next round
-        // ... use submissionsDao to collect
-        // call startNextRound() when done
+        evaluateRoundAndProceed(roundId);
     }
+
+    public void handleSubmission(UUID sessionId, ObjectNode payload) {
+        // minimal validation
+        if (payload == null) return;
+        String roundIdStr = payload.path("roundId").asText();
+        if (roundIdStr == null) return;
+
+        UUID roundId = UUID.fromString(roundIdStr);
+        UUID playerId = sessionManager.getUserId(sessionId);
+        // persist submission to DB (best-effort)
+        System.out.println("Test 1");
+        System.out.println(payload);
+        long ts = System.currentTimeMillis();
+        try {
+            submissionsDao.createSubmission(playerId, matchId, roundId, payload.path("order").asText(), ts);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        System.out.println("Test 2");
+        // store in-memory
+        inMemorySubmissions.computeIfAbsent(roundId, k -> new ConcurrentHashMap<>())
+                .put(playerId, payload);
+
+        // if both players submitted for this round, evaluate immediately
+        ConcurrentMap<UUID, ObjectNode> map = inMemorySubmissions.get(roundId);
+        if (map != null) {
+            if (map.containsKey(playerA) && map.containsKey(playerB)) {
+                // cancel deadline
+                ScheduledFuture<?> sf = roundDeadlines.remove(roundId);
+                if (sf != null) sf.cancel(false);
+
+                // evaluate and broadcast result
+                evaluateRoundAndProceed(roundId);
+            }
+        }
+    }
+
+    private void evaluateRoundAndProceed(UUID roundId) {
+        try {
+            // load round payload (string) and parse to ObjectNode
+            String roundPayloadStr = roundsDao.findById(roundId).getPayload();
+            ObjectNode roundPayload = (ObjectNode) JsonUtil.MAPPER.readTree(roundPayloadStr);
+
+            // fetch submissions for both players using player ids
+            Submission subA = submissionsDao.findByPlayerMatchRound(playerA, matchId, roundId);
+            Submission subB = submissionsDao.findByPlayerMatchRound(playerB, matchId, roundId);
+
+            ArrayNode submissionAArray = JsonUtil.MAPPER.createArrayNode();
+            ArrayNode submissionBArray = JsonUtil.MAPPER.createArrayNode();
+
+            System.out.println("TESTING");
+            if (subA != null) {
+                String p = subA.getSubmissionPayload();
+                // if saved payload is a JSON array, parse; otherwise try splitting a string
+                try {
+                    JsonNode n = JsonUtil.MAPPER.readTree(p);
+                    if (n.isArray()) submissionAArray = (ArrayNode)n;
+                    else submissionAArray.add(p);
+                } catch (Exception ex) {
+                    // fallback: treat as comma separated
+                    for (String s : p.split(",")) submissionAArray.add(s);
+                }
+            }
+
+            if (subB != null) {
+                String p = subB.getSubmissionPayload();
+                try {
+                    JsonNode n = JsonUtil.MAPPER.readTree(p);
+                    if (n.isArray()) submissionBArray = (ArrayNode)n;
+                    else submissionBArray.add(p);
+                } catch (Exception ex) {
+                    for (String s : p.split(",")) submissionBArray.add(s);
+                }
+            }
+
+            // validate
+            RoundValidator.ValidationResult resA = validator.validate(roundPayload, submissionAArray);
+            RoundValidator.ValidationResult resB = validator.validate(roundPayload, submissionBArray);
+
+            // convert correctness to points.
+            short ptsA = (short)(resA.correct() ? 1 : 0);
+            short ptsB = (short)(resB.correct() ? 1 : 0);
+
+            // persist submission correctness & score (if DAO supports it)
+            if (subA != null) submissionsDao.markCorrectAndSetScore(subA.getId(), resA.correct(), ptsA);
+            if (subB != null) submissionsDao.markCorrectAndSetScore(subB.getId(), resB.correct(), ptsB);
+
+            // update in-memory scores
+            addPointToPlayerA(ptsA);
+            addPointToPlayerB(ptsB);
+
+            // build result payload
+            ObjectNode result = JsonUtil.MAPPER.createObjectNode();
+            result.put("matchId", matchId.toString());
+            result.put("roundId", roundId.toString());
+            result.put("round", currentRound);
+            result.put("playerASubmission", submissionAArray.toString());
+            result.put("playerBSubmission", submissionBArray.toString());
+            result.put("playerAPoint", playerAScore);
+            result.put("playerBPoint", playerBScore); // consistent casing
+            result.put("message", "Round finished");
+            System.out.println("result");
+            System.out.println(result);
+            Envelope env = new Envelope(ProtocolConstants.ROUND_RESULT, result, null);
+            sendToPlayer(playerA, env);
+            sendToPlayer(playerB, env);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            ObjectNode err = JsonUtil.MAPPER.createObjectNode()
+                    .put("matchId", matchId.toString())
+                    .put("message", "Server error evaluating round");
+            Envelope env = new Envelope(ProtocolConstants.ROUND_RESULT, err, null);
+            sendToPlayer(playerA, env);
+            sendToPlayer(playerB, env);
+        } finally {
+            inMemorySubmissions.remove(roundId);
+            roundDeadlines.remove(roundId);
+            startNextRound();
+        }
+    }
+
+
 
     private void sendToPlayer(UUID playerId, Envelope env) {
         UUID sessionId = sessionManager.getLatestActiveSession(playerId).getId();

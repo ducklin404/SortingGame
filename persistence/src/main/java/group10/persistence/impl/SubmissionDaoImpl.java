@@ -18,7 +18,7 @@ public class SubmissionDaoImpl implements SubmissionDao {
     }
 
     @Override
-    public UUID createSubmission(UUID playerId, UUID matchId, UUID roundId, String submissionPayload, Integer timeMs) {
+    public UUID createSubmission(UUID playerId, UUID matchId, UUID roundId, String submissionPayload, Long timeMs) {
         // use RETURNING id to get generated uuid
         String sql = "INSERT INTO submissions (player_id, match_id, round_id, submission_payload, submitted_at, time_ms, is_correct, score) " +
                 "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, FALSE, 0) RETURNING id";
@@ -28,7 +28,7 @@ public class SubmissionDaoImpl implements SubmissionDao {
             ps.setObject(2, matchId);
             ps.setObject(3, roundId);
             ps.setString(4, submissionPayload);
-            if (timeMs != null) ps.setInt(5, timeMs);
+            if (timeMs != null) ps.setLong(5, timeMs);
             else ps.setNull(5, Types.INTEGER);
 
             try (ResultSet rs = ps.executeQuery()) {
@@ -147,8 +147,8 @@ public class SubmissionDaoImpl implements SubmissionDao {
         String payload = rs.getString("submission_payload");
         Timestamp submittedTs = rs.getTimestamp("submitted_at");
         Instant submittedAt = submittedTs == null ? null : submittedTs.toInstant();
-        int time = rs.getInt("time_ms");
-        Integer timeMs = rs.wasNull() ? null : time;
+        long time = rs.getLong("time_ms");
+        Long timeMs = rs.wasNull() ? null : time;
         boolean isCorrect = rs.getBoolean("is_correct");
         short score = rs.getShort("score");
         return new Submission(id, playerId, matchId, roundId, payload, submittedAt, timeMs, isCorrect, score);

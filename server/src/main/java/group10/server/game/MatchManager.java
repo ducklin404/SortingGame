@@ -15,10 +15,7 @@ import java.util.function.BiConsumer;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Collections;
 
-/**
- * Tracks pending matches that are waiting for START_MATCH_ACK from both parties.
- * When both acks are present, constructs a MatchInstance and calls startNextRound().
- */
+
 public class MatchManager {
     private final ConnectionRegistry connRegistry;
     private final SessionManager sessionManager;
@@ -30,7 +27,7 @@ public class MatchManager {
     private final MatchDao matchDao;
     // pending matchId -> MatchRecord
     private final Map<UUID, MatchRecord> pending = new ConcurrentHashMap<>();
-
+    private final ConcurrentMap<UUID, MatchInstance> activeMatches = new ConcurrentHashMap<>();
     // timeout for waiting both ACKs (ms)
     private final long ackTimeoutMs;
 
@@ -128,6 +125,8 @@ public class MatchManager {
                             matchDao
                     );
                     removed.instanceRef.set(inst);
+                    // add register to active match
+                    this.registerActiveInstance(inst.getMatchId(), inst);
 
                     // start first round
                     inst.startNextRound();
@@ -137,6 +136,18 @@ public class MatchManager {
             }
         }
         return false;
+    }
+
+    public void registerActiveInstance(UUID matchId, MatchInstance instance) {
+        activeMatches.put(matchId, instance);
+    }
+
+    public MatchInstance getActiveInstance(UUID matchId) {
+        return activeMatches.get(matchId);
+    }
+
+    public void unregisterActiveInstance(UUID matchId) {
+        activeMatches.remove(matchId);
     }
 
     public MatchRecord getPending(UUID matchId) {

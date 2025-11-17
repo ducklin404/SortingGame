@@ -8,10 +8,9 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
-import java.util.List;
-import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.JsonNode;
 
 public class RoundPanel extends JPanel {
@@ -115,11 +114,14 @@ public class RoundPanel extends JPanel {
     }
 
     private void onSubmit(ActionEvent e) {
-        // build order string (concat items). Adjust if your server expects a different format.
-        String order = "";
+        // build order as a JSON array (server's validator expects an array)
+        ArrayNode orderArray = JsonUtil.MAPPER.createArrayNode();
+        StringBuilder orderString = new StringBuilder();
         for (int i = 0; i < listModel.size(); i++) {
-            order += listModel.get(i);
-            if (i < listModel.size() - 1) order += ""; // no separator or add if protocol expects
+            String item = listModel.get(i);
+            orderArray.add(item);
+            orderString.append(item);
+            if (i < listModel.size() - 1) orderString.append(","); // keep a compact string for persistence/compatibility
         }
 
         // disable editing & show waiting
@@ -130,7 +132,10 @@ public class RoundPanel extends JPanel {
         ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
         payload.put("matchId", matchId);
         payload.put("roundId", roundId);
-        payload.put("order", order);
+        // put the array under "order" so server can read it as ArrayNode
+        payload.set("order", orderArray);
+        // also include a string representation for older server code that may call asText()
+        payload.put("orderString", orderString.toString());
         payload.put("timestamp", System.currentTimeMillis());
 
         try {
@@ -155,11 +160,10 @@ public class RoundPanel extends JPanel {
         }
 
         // parse fields
-        this.matchId = payload.path("matchId").asText(null);
-        this.roundId = payload.path("roundId").asText(null);
+        this.matchId = payload.path("matchId").asText();
+        this.roundId = payload.path("roundId").asText();
         int roundNo = payload.path("round").asInt(-1);
-        long serverDeadline = payload.path("deadlineTs").asLong(0);
-        this.deadlineTs = serverDeadline;
+        this.deadlineTs = payload.path("deadlineTs").asLong(0);
 
         // header: players & scores
         int aPts = payload.path("playerAPoint").asInt(0);

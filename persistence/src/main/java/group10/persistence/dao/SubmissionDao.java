@@ -8,7 +8,7 @@ import java.util.UUID;
 public interface SubmissionDao {
 
      // Create a submission. Returns generated submission id.
-    UUID createSubmission(UUID playerId, UUID matchId, UUID roundId, String submissionPayload, Integer timeMs);
+    UUID createSubmission(UUID playerId, UUID matchId, UUID roundId, String submissionPayload, Long timeMs);
 
     Submission findById(UUID submissionId);
 

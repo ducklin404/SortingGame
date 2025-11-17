@@ -38,7 +38,7 @@ public class Main {
         PlayerDao playerDao = new PlayerDaoImpl(ds);
         SessionDao sessionDao = new SessionDaoImpl(ds);
         InvitesDao invitesDao = new InvitesDaoImpl(ds);
-        MatchesDao matchesDao = new MatchesDaoImpl(ds);
+        MatchDao matchesDao = new MatchDaoImpl(ds);
         RoundsDao roundsDao = new RoundsDaoImpl(ds);
         MatchDao matchDao = new MatchDaoImpl(ds);
         SubmissionDao submissionDao = new SubmissionDaoImpl(ds);
@@ -93,6 +93,8 @@ public class Main {
                 InviteHandlers.inviteResponse(invitesDao, playerDao, sessionManager, connectionRegistry, matchManager));
         handlers.put(ProtocolConstants.START_MATCH_ACK,
                 MatchHandlers.start_match_ack(sessionManager, matchManager));
+        handlers.put(ProtocolConstants.SUBMIT,
+                MatchHandlers.submit_round(sessionManager, matchManager));
         // Start ServerSocket accept loop
         ServerSocket serverSocket = new ServerSocket(port);
         System.out.println("Minimal server listening on port " + port);
