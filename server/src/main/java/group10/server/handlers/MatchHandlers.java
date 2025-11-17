@@ -5,6 +5,7 @@ import group10.common.dto.Envelope;
 import group10.common.net.LengthPrefixedIO;
 import group10.common.util.JsonUtil;
 import group10.common.protocol.ProtocolConstants;
+import group10.server.game.MatchManager;
 import group10.server.router.MessageHandler;
 import group10.server.session.SessionManager;
 
@@ -13,18 +14,15 @@ import java.net.Socket;
 import java.util.UUID;
 
 public class MatchHandlers {
-    public static MessageHandler login(SessionManager sessionManager) {
+    public static MessageHandler start_match_ack(SessionManager sessionManager, MatchManager matchManager) {
         return (env, sock) -> {
-            // dummy login example
-            UUID fakeUser = UUID.randomUUID();
-            UUID sid = sessionManager.createSession(fakeUser);
+            UUID sessionId = env.getSessionId();
+            if (sessionId == null) {
+                // ignore or send error
+                return;
+            }
 
-            ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
-            payload.put("sessionId", sid.toString());
-            payload.put("userId", fakeUser.toString());
-
-            Envelope resp = new Envelope(ProtocolConstants.LOGIN_SUCCESS, payload, sid);
-            LengthPrefixedIO.writeObject(sock, resp);
+            boolean started = matchManager.recordAck(sessionId);
         };
     }
 }

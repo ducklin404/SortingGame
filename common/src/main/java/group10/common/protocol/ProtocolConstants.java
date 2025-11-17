@@ -20,6 +20,7 @@ public final class ProtocolConstants {
     // match
     public static final String START_MATCH = "START_MATCH";
     public static final String START_MATCH_ACK = "START_MATCH_ACK";
+    public static final String START_MATCH_TIMEOUT = "START_MATCH_TIMEOUT";
     public static final String START_ROUND = "START_ROUND";
     public static final String SUBMIT = "SUBMIT";
     public static final String ROUND_RESULT = "ROUND_RESULT";

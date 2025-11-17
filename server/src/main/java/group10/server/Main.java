@@ -5,8 +5,12 @@ import group10.common.dto.Envelope;
 import group10.common.util.JsonUtil;
 import group10.common.protocol.ProtocolConstants;
 import group10.common.net.LengthPrefixedIO;
-import group10.persistence.dao.PlayerDao;
+import group10.persistence.dao.*;
 import group10.persistence.impl.*;
+import group10.server.game.MatchManager;
+import group10.server.game.RoundGenerator;
+import group10.server.game.RoundValidator;
+import group10.server.handlers.MatchHandlers;
 import group10.server.router.MessageHandler;
 import group10.server.router.MessageRouter;
 import group10.server.session.SessionManager;
@@ -21,9 +25,6 @@ import java.util.UUID;
 import java.util.concurrent.*;
 import io.github.cdimascio.dotenv.Dotenv;
 import javax.sql.DataSource;
-import group10.persistence.dao.MatchesDao;
-import group10.persistence.dao.SessionDao;
-import group10.persistence.dao.InvitesDao;
 
 
 public class Main {
@@ -38,8 +39,11 @@ public class Main {
         SessionDao sessionDao = new SessionDaoImpl(ds);
         InvitesDao invitesDao = new InvitesDaoImpl(ds);
         MatchesDao matchesDao = new MatchesDaoImpl(ds);
+        RoundsDao roundsDao = new RoundsDaoImpl(ds);
+        MatchDao matchDao = new MatchDaoImpl(ds);
+        SubmissionDao submissionDao = new SubmissionDaoImpl(ds);
         long timeoutMs = 60000;
-
+        long ackTimeoutMs = 5000;
 
         int port = 9000;
 
@@ -48,9 +52,14 @@ public class Main {
         ExecutorService handlerExecutor = Executors.newCachedThreadPool();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         ConnectionRegistry connectionRegistry = new ConnectionRegistry();
-
-        // test session
+        RoundGenerator roundGenerator = new RoundGenerator();
+        RoundValidator roundValidator = new RoundValidator();
         SessionManager sessionManager = new SessionManager(sessionDao, timeoutMs);
+        MatchManager matchManager = new MatchManager(connectionRegistry, sessionManager, scheduler,
+                roundGenerator, roundValidator,
+                roundsDao, submissionDao, ackTimeoutMs, matchDao); // 15s timeout for ACKs
+
+
 
 
         Map<String, MessageHandler> handlers = new ConcurrentHashMap<>();
@@ -81,9 +90,9 @@ public class Main {
                 InviteHandlers.invite(sessionManager));
 
         handlers.put(ProtocolConstants.INVITE_RESPONSE,
-                InviteHandlers.inviteResponse(invitesDao, playerDao, sessionManager, connectionRegistry));
-
-
+                InviteHandlers.inviteResponse(invitesDao, playerDao, sessionManager, connectionRegistry, matchManager));
+        handlers.put(ProtocolConstants.START_MATCH_ACK,
+                MatchHandlers.start_match_ack(sessionManager, matchManager));
         // Start ServerSocket accept loop
         ServerSocket serverSocket = new ServerSocket(port);
         System.out.println("Minimal server listening on port " + port);

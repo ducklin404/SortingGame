@@ -7,6 +7,7 @@ import group10.common.net.LengthPrefixedIO;
 import group10.persistence.dao.InvitesDao;
 import group10.persistence.dao.PlayerDao;
 import group10.persistence.model.Player;
+import group10.server.game.MatchManager;
 import group10.server.net.ConnectionRegistry;
 import group10.common.util.JsonUtil;
 import group10.server.router.MessageHandler;
@@ -33,8 +34,6 @@ public class InviteHandlers {
             UUID fromUser = sessionManager.getUserId(env.getSessionId());
             UUID toUser = UUID.fromString(p.get("toPlayerId").asText());
 
-            // TODO: implements matchmaking logic
-            // For now, send fake "INVITE_SENT" response back to sender.
 
             ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
             payload.put("fromPlayerId", fromUser.toString());
@@ -46,7 +45,9 @@ public class InviteHandlers {
     }
 
 
-    public static MessageHandler inviteResponse(InvitesDao invitesDao, PlayerDao playerDao, SessionManager sessionManager, ConnectionRegistry connectionRegistry) {
+    public static MessageHandler inviteResponse(InvitesDao invitesDao, PlayerDao playerDao,
+                                                SessionManager sessionManager,
+                                                ConnectionRegistry connectionRegistry, MatchManager matchManager) {
         return (env, sock) -> {
             JsonNode p = env.getPayload();
             if (p == null || !p.has("inviteId") || !p.has("response")) {
@@ -91,7 +92,14 @@ public class InviteHandlers {
 
                     resp = new Envelope(START_MATCH, payload, fromSessionId);
                     LengthPrefixedIO.writeObject(connectionRegistry.getSocket(fromSessionId), resp);
-
+                    UUID matchId = UUID.randomUUID();
+                    matchManager.createPendingMatch(matchId, fromPlayerId, toPlayerId, fromSessionId, toSessionId,
+                        (mid, failedRecord) -> {
+                            // callback when match failed to start (timeout).
+                            if (failedRecord == null) {
+                                // notify both players perhaps
+                            }
+                    });
                 }
                 else{
                     invitesDao.rejectInvite(inviteId);

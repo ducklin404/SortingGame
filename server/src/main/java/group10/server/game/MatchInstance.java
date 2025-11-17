@@ -4,14 +4,17 @@ import group10.common.dto.Envelope;
 import group10.common.net.LengthPrefixedIO;
 import group10.common.protocol.ProtocolConstants;
 import group10.common.util.JsonUtil;
+import group10.persistence.dao.MatchDao;
 import group10.server.net.ConnectionRegistry;
-import group10.server.dao.RoundsDao;
-import group10.server.dao.SubmissionsDao;
+import group10.persistence.dao.RoundsDao;
+import group10.persistence.dao.SubmissionDao;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import group10.server.session.SessionManager;
 
 import java.net.Socket;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -28,43 +31,57 @@ public class MatchInstance {
     private final RoundGenerator generator;
     private final RoundValidator validator;
     private final ConnectionRegistry connRegistry;
+    private final SessionManager sessionManager;
     private final ScheduledExecutorService scheduler;
     private final RoundsDao roundsDao;
-    private final SubmissionsDao submissionsDao;
+    private final SubmissionDao submissionsDao;
+    private final MatchDao matchDao;
+    private UUID id;
 
-    private int currentRound = 0;
+    private short currentRound = 0;
     private final int totalRounds = GameRules.ROUND_COUNT;
 
     public MatchInstance(UUID matchId, UUID a, UUID b,
                          RoundGenerator generator,
                          RoundValidator validator,
                          ConnectionRegistry connRegistry,
+                         SessionManager sessionManager,
                          ScheduledExecutorService scheduler,
                          RoundsDao roundsDao,
-                         SubmissionsDao submissionsDao) {
+                         SubmissionDao submissionsDao,
+                         MatchDao matchDao) {
         this.matchId = matchId;
         this.playerA = a; this.playerB = b;
         this.generator = generator;
         this.validator = validator;
         this.connRegistry = connRegistry;
+        this.sessionManager = sessionManager;
         this.scheduler = scheduler;
         this.roundsDao = roundsDao;
         this.submissionsDao = submissionsDao;
+        this.matchDao = matchDao;
+
+        this.id = matchDao.createMatch(playerA, playerB);
+
     }
 
+
+
     public void startNextRound() {
+        if (currentRound == 0){
+            matchDao.startMatch(this.id);
+        }
         currentRound++;
         if (currentRound > totalRounds) {
             endMatch();
             return;
         }
-
         // generate payload
         ObjectNode payload = generator.generateLetterRound(15);
-
         // persist the round (roundsDao.insertRound returns roundId)
-        UUID roundId = roundsDao.insertRound(matchId, currentRound, payload.toString(), payload.get("order").asText(), System.currentTimeMillis() + GameRules.ROUND_TIME_MS);
-
+        UUID roundId = roundsDao.createRound(this.id, currentRound, payload.toString(),
+                payload.get("order").asText(),
+                Instant.ofEpochMilli(System.currentTimeMillis() + GameRules.ROUND_TIME_MS));
         // Send START_ROUND to both players
         ObjectNode msg = JsonUtil.MAPPER.createObjectNode();
         msg.put("matchId", matchId.toString());
@@ -73,7 +90,6 @@ public class MatchInstance {
         msg.set("items", payload.get("items"));
         msg.put("order", payload.get("order").asText());
         msg.put("deadlineTs", System.currentTimeMillis() + GameRules.ROUND_TIME_MS);
-
         Envelope env = new Envelope(ProtocolConstants.START_ROUND, msg, null);
         sendToPlayer(playerA, env);
         sendToPlayer(playerB, env);
@@ -89,9 +105,10 @@ public class MatchInstance {
     }
 
     private void sendToPlayer(UUID playerId, Envelope env) {
-        Socket socket = connRegistry.getSocket(playerId);
+        UUID sessionId = sessionManager.getLatestActiveSession(playerId).getId();
+        Socket socket = connRegistry.getSocket(sessionId);
 
-        try { LengthPrefixedIO.writeObject(socket, env); } catch (Exception ignored) {}
+        try { LengthPrefixedIO.writeObject(socket, env); } catch (Exception e) {e.printStackTrace();}
 
     }
 

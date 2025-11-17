@@ -19,7 +19,7 @@ public class WaitingPanel extends JPanel {
         label.setText("<html>Matched with:<br/><b>" + escapeHtml(name) + "</b><br/>Waiting for match to start...</html>");
     }
 
-    // tiny-escape; not a full HTML sanitizer but enough for simple names
+    // tiny-escape
     private String escapeHtml(String s) {
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }

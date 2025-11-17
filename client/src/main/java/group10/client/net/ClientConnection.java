@@ -98,6 +98,9 @@ public class ClientConnection {
                     MessageHandler handler = handlers.get(env.getType());
                     if (handler != null) {
                         try {
+                            System.out.println(env.getType());
+                            System.out.println(env.getPayload());
+                            System.out.println(env.getSessionId());
                             handler.handle(env, socket);
                         } catch (Exception e) {
                             e.printStackTrace();
