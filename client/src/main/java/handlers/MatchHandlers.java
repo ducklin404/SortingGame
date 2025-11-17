@@ -85,11 +85,26 @@ public class MatchHandlers {
         return (env, sock) -> {
             JsonNode payload = env.getPayload();
             javax.swing.SwingUtilities.invokeLater(() -> {
+                // Update round panel
                 roundPanel.onRoundFinished(payload);
-                // optional: return to "waiting" screen, or stay on round screen until server sends next START_ROUND
-                // manager.show("waiting"); // if you want to show a waiting screen
+
+                // Also update waiting panel (so if user is on waiting screen they see the last result)
+                try {
+                    WaitingPanel wp = (WaitingPanel) manager.getScreen("waiting");
+                    if (wp != null) wp.setLastResult(payload);
+                } catch (Exception e) {
+                    // defensive: don't crash UI if waiting panel missing
+                    e.printStackTrace();
+                }
+
+                // Optional: you can automatically switch to waiting screen after result,
+                // comment/uncomment per desired UX:
+                // manager.show("waiting");
             });
         };
     }
+
+
+
 
 }

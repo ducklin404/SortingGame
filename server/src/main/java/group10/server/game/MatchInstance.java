@@ -84,7 +84,7 @@ public class MatchInstance {
             return;
         }
         // generate payload
-        ObjectNode payload = generator.generateLetterRound(5);
+        ObjectNode payload = generator.generateLetterRound(2);
         // persist the round (roundsDao.insertRound returns roundId)
         UUID roundId = roundsDao.createRound(this.matchId, currentRound, payload.toString(),
                 payload.get("order").asText(),
@@ -137,7 +137,10 @@ public class MatchInstance {
         System.out.println(payload);
         long ts = System.currentTimeMillis();
         try {
-            submissionsDao.createSubmission(playerId, matchId, roundId, payload.path("order").asText(), ts);
+            System.out.println("payload");
+            System.out.println(payload);
+            System.out.println(payload.path("order").toString());
+            submissionsDao.createSubmission(playerId, matchId, roundId, payload.path("order").toString(), ts);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -188,6 +191,7 @@ public class MatchInstance {
                 }
             }
 
+
             if (subB != null) {
                 String p = subB.getSubmissionPayload();
                 try {
@@ -198,6 +202,11 @@ public class MatchInstance {
                     for (String s : p.split(",")) submissionBArray.add(s);
                 }
             }
+
+            System.out.println("A array");
+            System.out.println(submissionAArray);
+            System.out.println("B array");
+            System.out.println(submissionBArray);
 
             // validate
             RoundValidator.ValidationResult resA = validator.validate(roundPayload, submissionAArray);
@@ -214,7 +223,9 @@ public class MatchInstance {
             // update in-memory scores
             addPointToPlayerA(ptsA);
             addPointToPlayerB(ptsB);
-
+            System.out.println("Score");
+            System.out.println(this.playerAScore);
+            System.out.println(this.playerBScore);
             // build result payload
             ObjectNode result = JsonUtil.MAPPER.createObjectNode();
             result.put("matchId", matchId.toString());

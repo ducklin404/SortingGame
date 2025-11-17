@@ -36,7 +36,7 @@ public class SubmissionDaoImpl implements SubmissionDao {
                 throw new SQLException("Failed to insert submission");
             }
         } catch (SQLException e) {
-            // Note: will throw if unique constraint violated; caller can catch and treat as conflict
+            e.printStackTrace();
             throw new RuntimeException(e);
         }
     }
