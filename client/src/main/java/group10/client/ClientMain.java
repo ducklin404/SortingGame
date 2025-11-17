@@ -3,9 +3,7 @@ package group10.client;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import group10.client.net.ClientConnection;
 import group10.client.net.ClientMessageRouter;
-import group10.client.ui.ScreenManager;
-import group10.client.ui.MainMenuPanel;
-import group10.client.ui.PlayPanel;
+import group10.client.ui.*;
 import group10.common.dto.Envelope;
 import group10.common.net.LengthPrefixedIO;
 import group10.common.protocol.ProtocolConstants;
@@ -13,7 +11,7 @@ import group10.common.util.JsonUtil;
 import handlers.MatchHandlers;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import group10.client.ui.WaitingPanel;
+
 import javax.swing.SwingUtilities;
 import java.io.IOException;
 
@@ -55,24 +53,27 @@ public class ClientMain {
             frame.setLocationRelativeTo(null);
 
             ScreenManager manager = new ScreenManager(frame);
-            router.add(ProtocolConstants.START_MATCH,
-                    MatchHandlers.startMatchHandler(manager, clientConnection));
-            router.add(ProtocolConstants.START_MATCH_TIMEOUT,
-                    MatchHandlers.startMatchTimeoutHandler(manager));
-            router.registerAll(clientConnection, true);
 
 
             // Create UI screens
             MainMenuPanel mainMenu = new MainMenuPanel(manager, clientConnection);
             PlayPanel playPanel = new PlayPanel(manager);
             WaitingPanel waitingPanel = new WaitingPanel();
+            RoundPanel roundPanel = new RoundPanel(clientConnection);
 
             // Register screens
             manager.registerScreen("main", mainMenu);
             manager.registerScreen("play", playPanel);
             manager.registerScreen("waiting", waitingPanel);
+            manager.registerScreen("round", roundPanel);
 
 
+            router.add(ProtocolConstants.START_MATCH,
+                    MatchHandlers.startMatchHandler(manager, clientConnection));
+            router.add(ProtocolConstants.START_MATCH_TIMEOUT,
+                    MatchHandlers.startMatchTimeoutHandler(manager));
+            router.add(ProtocolConstants.START_ROUND, MatchHandlers.startRoundHandler(manager, roundPanel));
+            router.registerAll(clientConnection, true);
 
 
             // Show main menu

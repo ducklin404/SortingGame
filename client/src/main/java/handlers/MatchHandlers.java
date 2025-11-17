@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import group10.client.net.ClientConnection;
 import group10.client.net.MessageHandler;
+import group10.client.ui.RoundPanel;
 import group10.client.ui.ScreenManager;
 import group10.client.ui.WaitingPanel;
 import group10.common.util.JsonUtil;
@@ -63,6 +64,19 @@ public class MatchHandlers {
                     // defensive: if show throws, at least log it
                     e.printStackTrace();
                 }
+            });
+        };
+    }
+
+
+    public static MessageHandler startRoundHandler(ScreenManager manager, RoundPanel roundPanel) {
+        return (env, sock) -> {
+            JsonNode payload = env.getPayload();
+            // ensure UI changes happen on EDT — if you register with onUi, it's already EDT.
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                // populate and show round panel
+                roundPanel.startRound(payload);
+                manager.show("round"); // make sure "round" screen is registered in ScreenManager
             });
         };
     }
