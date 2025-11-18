@@ -6,6 +6,7 @@ import group10.common.net.LengthPrefixedIO;
 import group10.common.protocol.ProtocolConstants;
 import group10.common.util.JsonUtil;
 import group10.persistence.dao.MatchDao;
+import group10.persistence.dao.PlayerDao;
 import group10.persistence.model.Submission;
 import group10.server.net.ConnectionRegistry;
 import group10.persistence.dao.RoundsDao;
@@ -37,9 +38,12 @@ public class MatchInstance {
     private final SessionManager sessionManager;
     private final ScheduledExecutorService scheduler;
     private final RoundsDao roundsDao;
+    private final PlayerDao playerDao;
     private final SubmissionDao submissionsDao;
     private final MatchDao matchDao;
     private short currentRound = 0;
+    private String playerAUsername;
+    private String playerBUsername;
     private final int totalRounds = GameRules.ROUND_COUNT;
     // track scheduled deadline future(s) so we can cancel when both submit
     private final ConcurrentMap<UUID, ScheduledFuture<?>> roundDeadlines = new ConcurrentHashMap<>();
@@ -53,6 +57,7 @@ public class MatchInstance {
                          ConnectionRegistry connRegistry,
                          SessionManager sessionManager,
                          ScheduledExecutorService scheduler,
+                         PlayerDao playerDao,
                          RoundsDao roundsDao,
                          SubmissionDao submissionsDao,
                          MatchDao matchDao) {
@@ -63,10 +68,13 @@ public class MatchInstance {
         this.sessionManager = sessionManager;
         this.scheduler = scheduler;
         this.roundsDao = roundsDao;
+        this.playerDao = playerDao;
         this.submissionsDao = submissionsDao;
         this.matchDao = matchDao;
-
+        this.playerAUsername = playerDao.findById(a).getDisplayName();
+        this.playerBUsername = playerDao.findById(b).getDisplayName();
         this.matchId = matchDao.createMatch(playerA, playerB);
+
 
     }
 
@@ -98,6 +106,8 @@ public class MatchInstance {
         msg.set("items", payload.get("items"));
         msg.put("order", payload.get("order").asText());
         msg.put("deadlineTs", System.currentTimeMillis() + GameRules.ROUND_TIME_MS);
+        msg.put("playerA", this.playerAUsername);
+        msg.put("playerB", this.playerBUsername);
         msg.put("playerAPoint", this.playerAScore);
         msg.put("playerBPoint", this.playerBScore);
         Envelope env = new Envelope(ProtocolConstants.START_ROUND, msg, null);
@@ -107,18 +117,6 @@ public class MatchInstance {
         // schedule deadline handler
         ScheduledFuture<?> sf = scheduler.schedule(() -> onRoundDeadline(roundId), GameRules.ROUND_TIME_MS, TimeUnit.MILLISECONDS);
         roundDeadlines.put(roundId, sf);
-    }
-    public class SubmissionRecord {
-        private final String payload;
-        private final long timestamp;
-
-        public SubmissionRecord(String payload, long timestamp) {
-            this.payload = payload;
-            this.timestamp = timestamp;
-        }
-
-        public String getPayload() { return payload; }
-        public long getTimestamp() { return timestamp; }
     }
 
     private void onRoundDeadline(UUID roundId) {
@@ -234,6 +232,8 @@ public class MatchInstance {
             result.put("round", currentRound);
             result.put("playerASubmission", submissionAArray);
             result.put("playerBSubmission", submissionBArray);
+            result.put("playerA", this.playerAUsername);
+            result.put("playerB", this.playerBUsername);
             result.put("playerAPoint", playerAScore);
             result.put("playerBPoint", playerBScore); // consistent casing
             result.put("message", "Round finished");
@@ -279,19 +279,26 @@ public class MatchInstance {
 
     private void endMatch() {
         String result;
+        UUID winnerId;
         long aTime = submissionsDao.getTotalElapsedTimeForPlayerInMatch(this.playerA, this.matchId, false, true);
         long bTime = submissionsDao.getTotalElapsedTimeForPlayerInMatch(this.playerB, this.matchId, false, true);
         if (this.playerAScore > this.playerBScore){
             result = "A_WIN";
+            winnerId = this.playerA;
         }else if (this.playerBScore > this.playerAScore){
             result = "B_WIN";
+            winnerId = this.playerB;
         }else{
             if (aTime > bTime){
                 result = "A_WIN";
+                winnerId = this.playerA;
             }else if (bTime > aTime){
-                result = "B_WIN";}
+                result = "B_WIN";
+                winnerId = this.playerB;
+            }
             else{
                 result = "DRAW";
+                winnerId = null;
             }
         }
         matchDao.finishMatch(this.matchId, result);
@@ -299,12 +306,14 @@ public class MatchInstance {
         // build payload to send to both players
         ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
         payload.put("matchId", matchId.toString());
+        payload.put("winnerId", String.valueOf(sessionManager.getLatestActiveSession(winnerId).getId()));
         payload.put("result", result);
+        payload.put("playerA", this.playerAUsername);
+        payload.put("payloadB", this.playerBUsername);
         payload.put("playerAPoint", this.playerAScore);
         payload.put("playerBPoint", this.playerBScore);
         payload.put("playerATimeMs", aTime);
         payload.put("playerBTimeMs", bTime);
-        // convenience human-readable seconds
         payload.put("playerATimeSec", aTime / 1000.0);
         payload.put("playerBTimeSec", bTime / 1000.0);
         payload.put("message", "Match finished");

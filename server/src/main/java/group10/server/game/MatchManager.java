@@ -1,6 +1,7 @@
 package group10.server.game;
 
 import group10.persistence.dao.MatchDao;
+import group10.persistence.dao.PlayerDao;
 import group10.server.net.ConnectionRegistry;
 import group10.persistence.dao.RoundsDao;
 import group10.persistence.dao.SubmissionDao;
@@ -22,6 +23,7 @@ public class MatchManager {
     private final ScheduledExecutorService scheduler;
     private final RoundGenerator generator;
     private final RoundValidator validator;
+    private final PlayerDao playerDao;
     private final RoundsDao roundsDao;
     private final SubmissionDao submissionsDao;
     private final MatchDao matchDao;
@@ -36,6 +38,7 @@ public class MatchManager {
                         ScheduledExecutorService scheduler,
                         RoundGenerator generator,
                         RoundValidator validator,
+                        PlayerDao playerDao,
                         RoundsDao roundsDao,
                         SubmissionDao submissionsDao,
                         long ackTimeoutMs, MatchDao matchDao) {
@@ -44,6 +47,7 @@ public class MatchManager {
         this.scheduler = scheduler;
         this.generator = generator;
         this.validator = validator;
+        this.playerDao = playerDao;
         this.roundsDao = roundsDao;
         this.submissionsDao = submissionsDao;
         this.ackTimeoutMs = ackTimeoutMs;
@@ -120,6 +124,7 @@ public class MatchManager {
                             connRegistry,
                             sessionManager,
                             scheduler,
+                            playerDao,
                             roundsDao,
                             submissionsDao,
                             matchDao

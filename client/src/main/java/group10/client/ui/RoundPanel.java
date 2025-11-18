@@ -1,3 +1,4 @@
+// (Full simplified RoundPanel as before, only changed updateCountdown to show two-decimal numbers.)
 package group10.client.ui;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -13,66 +14,61 @@ import javax.swing.event.MouseInputAdapter;
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.IOException;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * RoundPanel with drag-and-drop reordering for arbitrary item strings.
- * - Items are displayed in a JList that supports dragging to reorder.
- * - Submission sends an array "submission" matching the list order.
- * - Shows order type (ASC/DESC if provided) and countdown.
- * - Accepts arbitrary item contents (not just single characters).
- */
 public class RoundPanel extends JPanel {
     private final ClientConnection connection;
 
-    // header
     private final JLabel roundLabel = new JLabel("Round: -");
     private final JLabel orderLabel = new JLabel("Order: -");
-    private final JLabel deadlineLabel = new JLabel("Deadline: -");
 
-    // items list (drag-to-reorder)
+    private final JProgressBar deadlineBar = new JProgressBar();
+    private final JLabel deadlineSecondsLabel = new JLabel("");
+
     private final DefaultListModel<String> itemsModel = new DefaultListModel<>();
     private final JList<String> itemsList = new JList<>(itemsModel);
 
-    // submission controls
     private final JButton submitButton = new JButton("Submit");
     private final JLabel yourSubmissionLabel = new JLabel("Your submission: -");
 
-    // bottom: score & message
-    private final JLabel scoreLabel = new JLabel("Score A 0 - 0 B");
-    private final JTextArea messageArea = new JTextArea();
+    private final JLabel scoreLabel = new JLabel("Score -");
 
     private volatile long deadlineTs = -1;
+    private volatile long deadlineTotalMs = -1;
     private javax.swing.Timer uiTimer;
     private String currentMatchId = null;
     private String currentRoundId = null;
+
+    private String playerADisplayName = "A";
+    private String playerBDisplayName = "B";
 
     public RoundPanel(ClientConnection connection) {
         this.connection = connection;
         setLayout(new BorderLayout(10,10));
         setBorder(new EmptyBorder(12,12,12,12));
 
-        // top
         JPanel top = new JPanel(new GridLayout(1,3,8,8));
         roundLabel.setHorizontalAlignment(SwingConstants.LEFT);
         orderLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        deadlineLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+
+        JPanel deadlinePanel = new JPanel(new BorderLayout(4,4));
+        deadlineBar.setStringPainted(true);
+        deadlineBar.setMinimum(0);
+        deadlineBar.setMaximum(1000);
+        deadlineBar.setValue(0);
+        deadlinePanel.add(deadlineBar, BorderLayout.CENTER);
+        deadlineSecondsLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+        deadlinePanel.add(deadlineSecondsLabel, BorderLayout.SOUTH);
+
         top.add(roundLabel);
         top.add(orderLabel);
-        top.add(deadlineLabel);
+        top.add(deadlinePanel);
         add(top, BorderLayout.NORTH);
 
-        // center
         JPanel center = new JPanel(new GridLayout(1,2,12,12));
 
-        // items panel
         JPanel itemsPanel = new JPanel(new BorderLayout(6,6));
         itemsPanel.setBorder(BorderFactory.createTitledBorder("Items (drag to reorder)"));
         itemsList.setVisibleRowCount(10);
@@ -80,18 +76,15 @@ public class RoundPanel extends JPanel {
         itemsList.setDragEnabled(true);
         itemsList.setDropMode(DropMode.INSERT);
         itemsList.setTransferHandler(new ReorderListTransferHandler());
-        JScrollPane scroll = new JScrollPane(itemsList);
-        itemsPanel.add(scroll, BorderLayout.CENTER);
-
+        itemsPanel.add(new JScrollPane(itemsList), BorderLayout.CENTER);
 
         center.add(itemsPanel);
 
-        // controls
         JPanel control = new JPanel();
         control.setLayout(new BoxLayout(control, BoxLayout.Y_AXIS));
         control.setBorder(BorderFactory.createTitledBorder("Submission"));
 
-        JLabel hint = new JLabel("Drag items to the order you want, then press Submit.");
+        JLabel hint = new JLabel("Drag items into desired order, then press Submit.");
         hint.setAlignmentX(LEFT_ALIGNMENT);
         control.add(hint);
         control.add(Box.createRigidArea(new Dimension(0,8)));
@@ -106,30 +99,20 @@ public class RoundPanel extends JPanel {
         center.add(control);
         add(center, BorderLayout.CENTER);
 
-        // bottom
         JPanel bottom = new JPanel(new BorderLayout(8,8));
-        bottom.setBorder(BorderFactory.createTitledBorder("Score / messages"));
+        bottom.setBorder(BorderFactory.createTitledBorder("Score"));
         scoreLabel.setFont(scoreLabel.getFont().deriveFont(Font.BOLD, 14f));
         bottom.add(scoreLabel, BorderLayout.NORTH);
-
-        messageArea.setEditable(false);
-        messageArea.setRows(4);
-        messageArea.setLineWrap(true);
-        messageArea.setWrapStyleWord(true);
-        bottom.add(new JScrollPane(messageArea), BorderLayout.CENTER);
         add(bottom, BorderLayout.SOUTH);
 
-        // actions
         submitButton.addActionListener(e -> doSubmit());
 
-        // enable drop by double-clicking an item to start drag (UX helpful on some systems)
         itemsList.addMouseListener(new MouseInputAdapter() {
             public void mousePressed(java.awt.event.MouseEvent e) {
                 if (e.getClickCount() == 2) {
                     int idx = itemsList.locationToIndex(e.getPoint());
                     if (idx >= 0) {
                         itemsList.setSelectedIndex(idx);
-                        // start drag programmatically
                         TransferHandler th = itemsList.getTransferHandler();
                         th.exportAsDrag(itemsList, e, TransferHandler.MOVE);
                     }
@@ -151,45 +134,51 @@ public class RoundPanel extends JPanel {
         String orderType = payload.has("order") ? payload.path("order").asText("") : "";
         orderLabel.setText("Order: " + (orderType.isEmpty() ? "(none)" : orderType));
 
-        // populate items (accept arbitrary strings)
         itemsModel.clear();
         if (payload.has("items") && payload.get("items").isArray()) {
             ArrayNode arr = (ArrayNode) payload.get("items");
             for (JsonNode n : arr) itemsModel.addElement(n.asText());
         }
 
-        // submissions
+        if (payload.has("playerA")) playerADisplayName = payload.path("playerA").asText(playerADisplayName);
+        if (payload.has("playerB")) playerBDisplayName = payload.path("playerB").asText(playerBDisplayName);
         int aPoints = payload.path("playerAPoint").asInt(0);
         int bPoints = payload.path("playerBPoint").asInt(0);
-        scoreLabel.setText(String.format("Score A: %d    B: %d", aPoints, bPoints));
-
-        messageArea.setText(payload.path("message").asText(""));
-
+        scoreLabel.setText(String.format("%s: %d    %s: %d", playerADisplayName, aPoints, playerBDisplayName, bPoints));
+        yourSubmissionLabel.setText("Your submission: ");
         if (payload.has("deadlineTs") && payload.get("deadlineTs").canConvertToLong()) {
             deadlineTs = payload.get("deadlineTs").asLong();
+            long now = System.currentTimeMillis();
+            deadlineTotalMs = Math.max(1, deadlineTs - now);
+            deadlineBar.setValue(deadlineBar.getMaximum());
             updateCountdown();
             uiTimer.start();
         } else {
             deadlineTs = -1;
-            deadlineLabel.setText("Deadline: -");
+            deadlineTotalMs = -1;
+            deadlineBar.setValue(0);
+            deadlineBar.setString("");
+            deadlineSecondsLabel.setText("");
             uiTimer.stop();
         }
 
-        boolean roundActive = deadlineTs <= 0 || Instant.now().toEpochMilli() < deadlineTs;
+        boolean roundActive = deadlineTs <= 0 || System.currentTimeMillis() < deadlineTs;
         setControlsEnabled(roundActive && !hasPlayerSubmitted(payload));
     }
 
     public void onRoundFinished(JsonNode payload) {
         if (payload == null) return;
-        messageArea.setText(payload.path("message").asText("Round finished"));
-
+        if (payload.has("playerA")) playerADisplayName = payload.path("playerA").asText(playerADisplayName);
+        if (payload.has("playerB")) playerBDisplayName = payload.path("playerB").asText(playerBDisplayName);
         int aPoints = payload.path("playerAPoint").asInt(0);
         int bPoints = payload.path("playerBPoint").asInt(0);
-        scoreLabel.setText(String.format("Score A: %d    B: %d", aPoints, bPoints));
+        scoreLabel.setText(String.format("%s: %d    %s: %d", playerADisplayName, aPoints, playerBDisplayName, bPoints));
         setControlsEnabled(false);
         uiTimer.stop();
+        deadlineBar.setValue(0);
+        deadlineBar.setString("Done");
+        deadlineSecondsLabel.setText("");
     }
-
 
     private boolean hasPlayerSubmitted(JsonNode payload) {
         JsonNode aSub = payload.path("playerASubmission");
@@ -211,28 +200,51 @@ public class RoundPanel extends JPanel {
 
     private void setControlsEnabled(boolean enabled) {
         submitButton.setEnabled(enabled);
-        if (!enabled) submitButton.setText("Submit (disabled)");
+        if (!enabled) submitButton.setText("Submitted");
         else submitButton.setText("Submit");
         itemsList.setEnabled(enabled);
     }
 
+    /**
+     * Updated: display two-decimal values for remaining and total seconds.
+     * Example: "12.12 12.11"
+     */
     private void updateCountdown() {
-        if (deadlineTs <= 0) {
-            deadlineLabel.setText("Deadline: -");
+        if (deadlineTs <= 0 || deadlineTotalMs <= 0) {
+            deadlineBar.setValue(0);
+            deadlineBar.setString("");
+            deadlineSecondsLabel.setText("");
             return;
         }
-        long now = Instant.now().toEpochMilli();
-        long remaining = deadlineTs - now;
-        if (remaining <= 0) {
-            deadlineLabel.setText("Deadline: expired");
+        long now = System.currentTimeMillis();
+        long remainingMs = Math.max(0, deadlineTs - now);
+
+        double remainingSec = remainingMs / 1000.0;
+        double totalSec = Math.max(0.0, deadlineTotalMs / 1000.0);
+
+        // If time expired
+        if (remainingMs <= 0) {
+            String remStr = String.format("%.2f", 0.0);
+            String totStr = String.format("%.2f", totalSec);
+            deadlineBar.setValue(0);
+            deadlineBar.setString(remStr);               // shows "0.00" on the bar
+            deadlineSecondsLabel.setText(remStr + " " + totStr);
             setControlsEnabled(false);
             uiTimer.stop();
             return;
         }
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
-        String abs = fmt.format(Instant.ofEpochMilli(deadlineTs));
-        String rel = String.format("%d s", (remaining + 500)/1000);
-        deadlineLabel.setText("Deadline: " + abs + " (in " + rel + ")");
+
+        // percent remaining (0..1)
+        double frac = remainingMs / (double) deadlineTotalMs;
+        int val = (int) Math.round(frac * deadlineBar.getMaximum());
+        deadlineBar.setValue(val);
+
+        String remStr = String.format("%.2f", remainingSec);
+        String totStr = String.format("%.2f", totalSec);
+
+        // bar shows remaining (two decimals); label shows "remaining total"
+        deadlineBar.setString(remStr);
+        deadlineSecondsLabel.setText(remStr + " " + totStr);
     }
 
     private void doSubmit() {
@@ -240,7 +252,6 @@ public class RoundPanel extends JPanel {
             JOptionPane.showMessageDialog(this, "No active round to submit to", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        // build array from list order
         ArrayNode outArr = JsonUtil.MAPPER.createArrayNode();
         for (int i = 0; i < itemsModel.size(); i++) outArr.add(itemsModel.get(i));
 
@@ -259,14 +270,11 @@ public class RoundPanel extends JPanel {
         }
     }
 
-    // TransferHandler to reorder items inside JList via drag and drop (MOVE)
     private class ReorderListTransferHandler extends TransferHandler {
         private final DataFlavor localObjectFlavor = new DataFlavor(String.class, "String");
         private int sourceIndex = -1;
 
-        public int getSourceActions(JComponent c) {
-            return MOVE;
-        }
+        public int getSourceActions(JComponent c) { return MOVE; }
 
         protected Transferable createTransferable(JComponent c) {
             sourceIndex = itemsList.getSelectedIndex();
@@ -289,7 +297,6 @@ public class RoundPanel extends JPanel {
             try {
                 String data = (String) info.getTransferable().getTransferData(localObjectFlavor);
                 if (sourceIndex < 0) return false;
-                // adjust index when removing earlier element
                 if (index > sourceIndex) index--;
                 itemsModel.remove(sourceIndex);
                 itemsModel.add(index, data);
@@ -301,8 +308,6 @@ public class RoundPanel extends JPanel {
             }
         }
 
-        protected void exportDone(JComponent c, Transferable t, int action) {
-            sourceIndex = -1;
-        }
+        protected void exportDone(JComponent c, Transferable t, int action) { sourceIndex = -1; }
     }
 }

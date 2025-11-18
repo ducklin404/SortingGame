@@ -12,6 +12,7 @@ import group10.common.protocol.ProtocolConstants;
 
 import javax.swing.*;
 import java.io.IOException;
+import java.util.Objects;
 
 public class MatchHandlers {
 
@@ -119,10 +120,16 @@ public class MatchHandlers {
                 // build a friendly message
                 StringBuilder sb = new StringBuilder();
                 sb.append("Match finished\n\n");
-                sb.append("Result: ").append(payload.path("result").asText(
-                        // fallback if server didn't set result string
-                        computeResultFallback(payload)
-                )).append("\n\n");
+                if (Objects.equals(payload.path("result").asText(), "DRAW")){
+                    sb.append("Draw!").append("\n\n");
+                } else if (Objects.equals(payload.path("winnerId").asText(), clientConnection.getSessionId().toString())) {
+                    sb.append("You win!").append("\n\n");
+                }else{
+                    sb.append("You lose!").append("\n\n");
+                }
+                System.out.println(clientConnection.getSessionId().toString());
+
+
                 sb.append("Score: A ").append(payload.path("playerAPoint").asInt(0))
                         .append("  -  B ").append(payload.path("playerBPoint").asInt(0)).append("\n");
                 if (payload.has("playerATimeSec") || payload.has("playerBTimeSec")) {
@@ -133,7 +140,6 @@ public class MatchHandlers {
                     ));
                 }
 
-                sb.append("\nMessage: ").append(payload.path("message").asText(""));
 
                 // options
                 Object[] options = new Object[] { "Request Rematch", "Exit to Main" };

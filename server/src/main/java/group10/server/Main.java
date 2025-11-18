@@ -58,7 +58,7 @@ public class Main {
         SessionManager sessionManager = new SessionManager(sessionDao, timeoutMs);
         MatchManager matchManager = new MatchManager(connectionRegistry, sessionManager, scheduler,
                 roundGenerator, roundValidator,
-                roundsDao, submissionDao, ackTimeoutMs, matchDao); // 15s timeout for ACKs
+                playerDao, roundsDao, submissionDao, ackTimeoutMs, matchDao); // 15s timeout for ACKs
 
 
 
