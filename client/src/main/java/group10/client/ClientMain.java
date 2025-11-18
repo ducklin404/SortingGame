@@ -1,5 +1,6 @@
 package group10.client;
 
+import com.formdev.flatlaf.FlatLightLaf;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import group10.client.net.ClientConnection;
 import group10.client.net.ClientMessageRouter;
@@ -10,15 +11,23 @@ import handlers.MatchHandlers;
 import handlers.LeaderboardHandlers;
 import handlers.HistoryHandlers;
 
-
 import javax.swing.*;
 import java.io.IOException;
+import java.awt.Font;
 
 public class ClientMain {
+
     public static void main(String[] args) throws IOException {
 
+        // ⭐ ÁP DỤNG GIAO DIỆN FLATLAF
+        FlatLightLaf.setup();
+        UIManager.put("Button.arc", 12);       // nút bo góc
+        UIManager.put("Component.arc", 12);    // bo góc cho tất cả component
+        UIManager.put("Component.focusWidth", 1);
+        UIManager.put("defaultFont", new Font("Segoe UI", Font.PLAIN, 16));
+
         // 1. CONNECT
-        ClientConnection clientConnection = new ClientConnection("127.0.0.1", 9000);
+        ClientConnection clientConnection = new ClientConnection("26.77.147.25", 9000);
         clientConnection.connect();
 
         // 2. ROUTER
@@ -47,8 +56,6 @@ public class ClientMain {
             RoundPanel roundPanel = new RoundPanel(clientConnection);
             LeaderboardPanel leaderboardPanel = new LeaderboardPanel(manager);
             HistoryPanel historyPanel = new HistoryPanel(manager);
-
-
 
             // Register screens
             manager.registerScreen("leaderboard", leaderboardPanel);
@@ -80,19 +87,17 @@ public class ClientMain {
             router.add(ProtocolConstants.MATCH_HISTORY_DATA,
                     HistoryHandlers.historyHandler(manager));
 
-
-
-            // 🔴 THÊM ĐOẠN NÀY
+            // 🔴 ERROR
             router.add(ProtocolConstants.ERROR, (env, sock) -> {
                 System.out.println("== ERROR từ server ==");
                 System.out.println("type  : " + env.getType());
                 System.out.println("payload: " + env.getPayload());
             });
 
-            // ========== GẮN ROUTER VÀO CONNECTION ==========
+            // attach router
             router.registerAll(clientConnection, true);
 
-            // ========== BÂY GIỜ MỚI SEND PING ==========
+            // Send ping
             try {
                 ObjectNode pingPayload = JsonUtil.MAPPER.createObjectNode();
                 clientConnection.send(ProtocolConstants.PING, pingPayload);

@@ -1,11 +1,13 @@
 package group10.server.handlers;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import group10.common.dto.Envelope;
 import group10.common.net.LengthPrefixedIO;
 import group10.common.protocol.ProtocolConstants;
 import group10.common.util.JsonUtil;
 import group10.persistence.dao.PlayerDao;
+import group10.persistence.model.Player;
 import group10.persistence.model.PlayerStats;
 import group10.server.router.MessageHandler;
 
@@ -24,18 +26,35 @@ public class LeaderboardHandlers {
             // 1. Lấy top 20 người chơi
             List<PlayerStats> items = playerDao.getLeaderboard(20);
 
-            // 2. Tạo JSON payload
-            ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
-            payload.set("items", JsonUtil.MAPPER.valueToTree(items));
+            // 2. Tạo JSON thủ công
+            ArrayNode arr = JsonUtil.MAPPER.createArrayNode();
 
-            // 3. Tạo Envelope
+            for (PlayerStats s : items) {
+
+                ObjectNode row = arr.addObject();
+
+                // Lấy username từ database
+                Player p = playerDao.findById(s.getPlayerId());
+
+                row.put("playerId", s.getPlayerId().toString());
+                row.put("username", (p != null ? p.getUsername() : "Unknown"));
+
+                row.put("totalPoints", s.getTotalPoints());
+                row.put("wins", s.getWins());
+                row.put("losses", s.getLosses());
+                row.put("draws", s.getDraws());
+                row.put("matchesPlayed", s.getMatchesPlayed());
+            }
+
+            ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
+            payload.set("items", arr);
+
             Envelope resp = new Envelope(
                     ProtocolConstants.LEADERBOARD_DATA,
                     payload,
                     sessionId
             );
 
-            // 4. Gửi về client
             try {
                 LengthPrefixedIO.writeObject(sock, resp);
             } catch (IOException e) {

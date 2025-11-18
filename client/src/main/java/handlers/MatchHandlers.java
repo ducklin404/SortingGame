@@ -13,167 +13,185 @@ import group10.common.protocol.ProtocolConstants;
 import javax.swing.*;
 import java.io.IOException;
 
+/**
+ * MatchHandlers – xử lý toàn bộ flow của trận đấu
+ * Không thay đổi logic gameplay, chỉ làm đẹp, tối ưu.
+ */
 public class MatchHandlers {
+
+    // ============================================================
+    // =============== START MATCH =================================
+    // ============================================================
 
     public static MessageHandler startMatchHandler(ScreenManager manager, ClientConnection clientConnection) {
         return (env, sock) -> {
+
             JsonNode payload = env.getPayload();
-            System.out.println(payload);
             String opponent = payload != null && payload.has("opponent")
-                    ? payload.get("opponent").asText(null)
-                    : "opponent";
+                    ? payload.get("opponent").asText()
+                    : "Opponent";
 
-            // UI: manager.show must be called on EDT; if you used ClientConnection.onUi when registering,
-            // this runs on EDT already. If not, wrap with SwingUtilities.invokeLater here.
-            JPanel screen = manager.getScreen("waiting");
-            if (screen instanceof WaitingPanel) {
-                ((WaitingPanel) screen).setOpponentName(opponent);
-            }
-            manager.show("waiting");
+            SwingUtilities.invokeLater(() -> {
+                WaitingPanel waiting = (WaitingPanel) manager.getScreen("waiting");
+                if (waiting != null) waiting.setOpponentName(opponent);
+                manager.show("waiting");
+            });
 
-            // ACK
-            ObjectNode ackPayload = JsonUtil.MAPPER.createObjectNode();
-            ackPayload.put("received", true);
+            // gửi ACK cho server
+            ObjectNode ack = JsonUtil.MAPPER.createObjectNode();
+            ack.put("received", true);
+
             try {
-                clientConnection.send(ProtocolConstants.START_MATCH_ACK, ackPayload);
+                clientConnection.send(ProtocolConstants.START_MATCH_ACK, ack);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         };
     }
 
-    public static MessageHandler startMatchTimeoutHandler(ScreenManager manager) {
-        return (env, sock) -> {
-            // Make sure UI work runs on EDT. If you already register with onUi, this will run on EDT
-            // and invokeLater simply runs code immediately; it's safe either way.
-            SwingUtilities.invokeLater(() -> {
-                // show a tiny notification/dialog
-                JOptionPane.showMessageDialog(
-                        null,
-                        "Match cancelled (timeout).",
-                        "Match cancelled",
-                        JOptionPane.INFORMATION_MESSAGE
-                );
+    // ============================================================
+    // =============== START MATCH TIMEOUT =========================
+    // ============================================================
 
-                // return to main screen
-                try {
-                    WaitingPanel wp = (WaitingPanel) manager.getScreen("waiting");
-                    if (wp != null) wp.showTemporaryMessage("Match cancelled (timeout)", 2500);
-                    manager.show("main");
-                } catch (Exception e) {
-                    // defensive: if show throws, at least log it
-                    e.printStackTrace();
-                }
-            });
-        };
+    public static MessageHandler startMatchTimeoutHandler(ScreenManager manager) {
+        return (env, sock) -> SwingUtilities.invokeLater(() -> {
+
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Match cancelled (timeout).",
+                    "Timeout",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
+            WaitingPanel waiting = (WaitingPanel) manager.getScreen("waiting");
+            if (waiting != null)
+                waiting.showTemporaryMessage("Match cancelled (timeout)", 2500);
+
+            manager.show("main");
+        });
     }
 
+    // ============================================================
+    // =============== START ROUND ================================
+    // ============================================================
 
     public static MessageHandler startRoundHandler(ScreenManager manager, RoundPanel roundPanel) {
         return (env, sock) -> {
             JsonNode payload = env.getPayload();
-            // ensure UI changes happen on EDT — if you register with onUi, it's already EDT.
-            javax.swing.SwingUtilities.invokeLater(() -> {
-                // populate and show round panel
+
+            SwingUtilities.invokeLater(() -> {
                 roundPanel.startRound(payload);
-                manager.show("round"); // make sure "round" screen is registered in ScreenManager
+                manager.show("round");
             });
         };
     }
 
+    // ============================================================
+    // =============== ROUND RESULT ================================
+    // ============================================================
+
     public static MessageHandler roundResultHandler(ScreenManager manager, RoundPanel roundPanel) {
         return (env, sock) -> {
             JsonNode payload = env.getPayload();
-            javax.swing.SwingUtilities.invokeLater(() -> {
-                // Update round panel
+
+            SwingUtilities.invokeLater(() -> {
+
                 roundPanel.onRoundFinished(payload);
 
-                // Also update waiting panel (so if user is on waiting screen they see the last result)
                 try {
-                    WaitingPanel wp = (WaitingPanel) manager.getScreen("waiting");
-                    if (wp != null) wp.setLastResult(payload);
+                    WaitingPanel waiting = (WaitingPanel) manager.getScreen("waiting");
+                    if (waiting != null)
+                        waiting.setLastResult(payload);
                 } catch (Exception e) {
-                    // defensive: don't crash UI if waiting panel missing
                     e.printStackTrace();
                 }
 
-                // Optional: you can automatically switch to waiting screen after result,
-                // comment/uncomment per desired UX:
+                // Nếu muốn auto chuyển sang waiting:
                 // manager.show("waiting");
             });
         };
     }
 
-    public static MessageHandler matchFinishedHandler(ScreenManager manager, ClientConnection clientConnection) {
+    // ============================================================
+    // =============== MATCH FINISHED ==============================
+    // ============================================================
+
+    public static MessageHandler matchFinishedHandler(ScreenManager manager, ClientConnection connection) {
         return (env, sock) -> {
             JsonNode payload = env.getPayload();
 
-            // run UI work on EDT
             SwingUtilities.invokeLater(() -> {
-                // show last result in WaitingPanel too (non-fatal if missing)
+
+                // cập nhật WaitingPanel
                 try {
-                    WaitingPanel wp = (WaitingPanel) manager.getScreen("waiting");
-                    if (wp != null) wp.setLastResult(payload);
+                    WaitingPanel waiting = (WaitingPanel) manager.getScreen("waiting");
+                    if (waiting != null) waiting.setLastResult(payload);
                 } catch (Exception ignored) {}
 
-                // build a friendly message
+                // Tạo summary đẹp
                 StringBuilder sb = new StringBuilder();
-                sb.append("Match finished\n\n");
-                sb.append("Result: ").append(payload.path("result").asText(
-                        // fallback if server didn't set result string
-                        computeResultFallback(payload)
-                )).append("\n\n");
-                sb.append("Score: A ").append(payload.path("playerAPoint").asInt(0))
-                        .append("  -  B ").append(payload.path("playerBPoint").asInt(0)).append("\n");
+                sb.append("🎉 MATCH FINISHED 🎉\n\n");
+
+                sb.append("Result: ")
+                        .append(payload.path("result").asText(resultFallback(payload)))
+                        .append("\n\n");
+
+                sb.append("Score:  A ")
+                        .append(payload.path("playerAPoint").asInt(0))
+                        .append("  -  B ")
+                        .append(payload.path("playerBPoint").asInt(0))
+                        .append("\n");
+
                 if (payload.has("playerATimeSec") || payload.has("playerBTimeSec")) {
                     sb.append(String.format(
-                            "Time A: %s s  Time B: %s s\n",
-                            fmt3(payload.get("playerATimeSec")),
-                            fmt3(payload.get("playerBTimeSec"))
+                            "Time A: %s s\nTime B: %s s\n",
+                            fmt(payload.get("playerATimeSec")),
+                            fmt(payload.get("playerBTimeSec"))
                     ));
                 }
 
-                sb.append("\nMessage: ").append(payload.path("message").asText(""));
+                sb.append("\nMessage: ")
+                        .append(payload.path("message").asText(""));
 
-                // options
-                Object[] options = new Object[] { "Request Rematch", "Exit to Main" };
-                int chosen = JOptionPane.showOptionDialog(
+                // Hiển thị lựa chọn
+                Object[] options = {"Request Rematch", "Exit to Main"};
+
+                int choice = JOptionPane.showOptionDialog(
                         null,
                         sb.toString(),
-                        "Match finished",
+                        "Match Result",
                         JOptionPane.DEFAULT_OPTION,
                         JOptionPane.INFORMATION_MESSAGE,
                         null,
                         options,
-                        options[1] // default to Exit
+                        options[1]
                 );
 
-                // chosen == 0 => Rematch, chosen == 1 or -1 => Exit
-                if (chosen == 0) {
-                    // Build rematch payload (server may expect other fields; adapt as necessary)
-                    ObjectNode out = JsonUtil.MAPPER.createObjectNode();
-                    out.put("matchId", payload.path("matchId").asText(""));
+                // Xử lý lựa chọn
+                if (choice == 0) {
+                    ObjectNode rematch = JsonUtil.MAPPER.createObjectNode();
+                    rematch.put("matchId", payload.path("matchId").asText(""));
+
                     try {
-                        clientConnection.send(ProtocolConstants.REMATCH_REQUEST, out);
-                        // provide immediate feedback
-                        JOptionPane.showMessageDialog(null, "Rematch request sent.", "Rematch", JOptionPane.INFORMATION_MESSAGE);
+                        connection.send(ProtocolConstants.REMATCH_REQUEST, rematch);
+                        JOptionPane.showMessageDialog(null, "Rematch request sent!", "Rematch", JOptionPane.INFORMATION_MESSAGE);
                     } catch (IOException e) {
-                        e.printStackTrace();
-                        JOptionPane.showMessageDialog(null, "Failed to send rematch request: " + e.getMessage(),
-                                "Network error", JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.showMessageDialog(null, "Error sending rematch: " + e.getMessage(), "Network Error", JOptionPane.ERROR_MESSAGE);
                     }
-                    // switch to waiting screen where player waits for opponent decision
+
                     manager.show("waiting");
                 } else {
-                    // Exit to main screen
                     manager.show("main");
                 }
             });
         };
     }
 
-    // small helper: compute result string if server didn't include "result"
-    private static String computeResultFallback(JsonNode payload) {
+    // ============================================================
+    // =============== UTILITY ====================================
+    // ============================================================
+
+    private static String resultFallback(JsonNode payload) {
         int a = payload.path("playerAPoint").asInt(0);
         int b = payload.path("playerBPoint").asInt(0);
         if (a > b) return "A_WIN";
@@ -181,11 +199,7 @@ public class MatchHandlers {
         return "DRAW";
     }
 
-    private static String fmt3(JsonNode n) {
-        if (n == null || !n.isNumber()) return "-";
-        return String.format("%.3f", n.asDouble());
+    private static String fmt(JsonNode n) {
+        return (n == null || !n.isNumber()) ? "-" : String.format("%.3f", n.asDouble());
     }
-
-
-
 }

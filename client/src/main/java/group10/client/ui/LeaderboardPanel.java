@@ -40,7 +40,7 @@ public class LeaderboardPanel extends JPanel {
 
         // Table
         tableModel = new DefaultTableModel(
-                new String[]{"Rank", "Player ID", "Points", "Wins", "Losses", "Draws", "Matches"}, 0
+                new String[]{"Rank", "Player", "Points", "Wins", "Losses", "Draws", "Matches"}, 0
         ) {
             @Override
             public boolean isCellEditable(int row, int col) {
@@ -119,7 +119,7 @@ public class LeaderboardPanel extends JPanel {
                 JsonNode item = allItems.get(i);
 
                 int rank = i + 1;
-                String id = item.path("playerId").asText();
+                String username = item.path("username").asText();
                 double points = item.path("totalPoints").asDouble();
                 int wins = item.path("wins").asInt();
                 int losses = item.path("losses").asInt();
@@ -127,7 +127,7 @@ public class LeaderboardPanel extends JPanel {
                 int matches = item.path("matchesPlayed").asInt();
 
                 tableModel.addRow(new Object[]{
-                        rank, id, points, wins, losses, draws, matches
+                        rank, username, points, wins, losses, draws, matches
                 });
             }
 
