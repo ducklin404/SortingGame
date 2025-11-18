@@ -13,6 +13,7 @@ public class ScreenManager {
     public ScreenManager(JFrame frame) {
         this.frame = frame;
         frame.getContentPane().setLayout(new BorderLayout());
+
     }
 
     public void registerScreen(String key, JPanel panel) {
