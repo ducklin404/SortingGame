@@ -85,7 +85,7 @@ public class MatchInstance {
             return;
         }
         // generate payload
-        ObjectNode payload = generator.generateLetterRound(2);
+        ObjectNode payload = generator.generateRandomRound(1+currentRound);
         // persist the round (roundsDao.insertRound returns roundId)
         UUID roundId = roundsDao.createRound(this.matchId, currentRound, payload.toString(),
                 payload.get("order").asText(),
