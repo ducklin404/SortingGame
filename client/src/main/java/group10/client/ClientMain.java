@@ -24,7 +24,7 @@ import static group10.common.protocol.ProtocolConstants.*;
 
 public class ClientMain {
     public static void main(String[] args) throws IOException {
-        ClientConnection clientConnection = new ClientConnection("127.0.0.1", 9000);
+        ClientConnection clientConnection = new ClientConnection("26.77.147.25", 9000);
         clientConnection.connect();
         ClientMessageRouter router = new ClientMessageRouter();
 
@@ -36,6 +36,8 @@ public class ClientMain {
             clientConnection.setSessionId(env.getSessionId());
             System.out.println(clientConnection.getSessionId());
         });
+
+
         ObjectNode payload = JsonUtil.MAPPER.createObjectNode();
 
         try {
@@ -75,6 +77,8 @@ public class ClientMain {
             router.add(ProtocolConstants.START_ROUND, MatchHandlers.startRoundHandler(manager, roundPanel));
             router.add(ProtocolConstants.ROUND_RESULT, MatchHandlers.roundResultHandler(manager, roundPanel));
             router.add(ProtocolConstants.MATCH_RESULT, MatchHandlers.matchFinishedHandler(manager, clientConnection));
+
+
             router.registerAll(clientConnection, true);
 
 

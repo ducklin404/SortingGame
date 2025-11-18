@@ -18,6 +18,7 @@ import group10.server.handlers.InviteHandlers;
 import group10.server.net.ConnectionRegistry;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
@@ -63,8 +64,12 @@ public class Main {
 
 
         Map<String, MessageHandler> handlers = new ConcurrentHashMap<>();
+
+
+
         // Test ping
         handlers.put(ProtocolConstants.PING, (env, sock) -> {
+
             // reply with PONG; use the same sessionId if present
             ObjectNode payload = JsonUtil.MAPPER.createObjectNode()
                     .put("ts", System.currentTimeMillis());
@@ -88,16 +93,18 @@ public class Main {
         // Register handlers
         handlers.put(ProtocolConstants.INVITE,
                 InviteHandlers.invite(sessionManager));
-
         handlers.put(ProtocolConstants.INVITE_RESPONSE,
                 InviteHandlers.inviteResponse(invitesDao, playerDao, sessionManager, connectionRegistry, matchManager));
         handlers.put(ProtocolConstants.START_MATCH_ACK,
                 MatchHandlers.start_match_ack(sessionManager, matchManager));
         handlers.put(ProtocolConstants.SUBMIT,
                 MatchHandlers.submit_round(sessionManager, matchManager));
+
+
+
         // Start ServerSocket accept loop
-        ServerSocket serverSocket = new ServerSocket(port);
-        System.out.println("Minimal server listening on port " + port);
+        ServerSocket serverSocket = new ServerSocket(port, 50, InetAddress.getByName("0.0.0.0"));
+        System.out.println("Server listening on port " + port);
 
         // shutdown hook to clean up executors and close socket
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
