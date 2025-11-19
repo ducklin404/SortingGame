@@ -19,6 +19,7 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-annotations:2.17.0")
     implementation("com.formdev:flatlaf:3.4")
     implementation("com.formdev:flatlaf-intellij-themes:3.4")
+
 }
 
 tasks.test {

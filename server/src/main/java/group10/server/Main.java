@@ -59,7 +59,7 @@ public class Main {
         SessionManager sessionManager = new SessionManager(sessionDao, timeoutMs);
         MatchManager matchManager = new MatchManager(connectionRegistry, sessionManager, scheduler,
                 roundGenerator, roundValidator,
-                roundsDao, submissionDao, ackTimeoutMs, matchDao); // 15s timeout for ACKs
+                playerDao, roundsDao, submissionDao, ackTimeoutMs, matchDao); // 15s timeout for ACKs
 
 
 
@@ -72,9 +72,9 @@ public class Main {
                     .put("ts", System.currentTimeMillis());
             UUID ephemeralUser;
             if (connectionRegistry.isEmpty()){
-                ephemeralUser = UUID.fromString("e1af3cb6-0be8-45c2-b384-62afbc027251");
+                ephemeralUser = UUID.fromString("3169622e-885d-43ca-9685-9ecc7314f035");
             }else{
-                ephemeralUser = UUID.fromString("ab2046b2-a8d6-4874-bf37-63a52a324c1d");
+                ephemeralUser = UUID.fromString("3c17e4ef-59dc-44d7-b67d-481a5677573e");
             }
             UUID ephemeralSession = sessionManager.createSession(ephemeralUser);
             // register mapping and attach to envelope so handlers see it

@@ -95,26 +95,26 @@ public class InviteHandlers {
                     LengthPrefixedIO.writeObject(connectionRegistry.getSocket(fromSessionId), resp);
                     UUID matchId = UUID.randomUUID();
                     matchManager.createPendingMatch(matchId, fromPlayerId, toPlayerId, fromSessionId, toSessionId,
-                        (mid, failedRecord) -> {
-                            // callback when match failed to start (timeout).
-                            if (failedRecord == null) {
-                                ObjectNode tempPl = JsonUtil.MAPPER.createObjectNode();
-                                Envelope msg = new Envelope(START_MATCH_TIMEOUT, tempPl, toSessionId);
-                                try {
-                                    LengthPrefixedIO.writeObject(connectionRegistry.getSocket(toSessionId), msg);
-                                } catch (IOException e) {
-                                    throw new RuntimeException(e);
-                                }
+                            (mid, failedRecord) -> {
+                                // callback when match failed to start (timeout).
+                                if (failedRecord == null) {
+                                    ObjectNode tempPl = JsonUtil.MAPPER.createObjectNode();
+                                    Envelope msg = new Envelope(START_MATCH_TIMEOUT, tempPl, toSessionId);
+                                    try {
+                                        LengthPrefixedIO.writeObject(connectionRegistry.getSocket(toSessionId), msg);
+                                    } catch (IOException e) {
+                                        throw new RuntimeException(e);
+                                    }
 
-                                msg = new Envelope(START_MATCH_TIMEOUT, tempPl, fromSessionId);
-                                try {
-                                    LengthPrefixedIO.writeObject(connectionRegistry.getSocket(fromSessionId), msg);
-                                } catch (IOException e) {
-                                    throw new RuntimeException(e);
-                                }
+                                    msg = new Envelope(START_MATCH_TIMEOUT, tempPl, fromSessionId);
+                                    try {
+                                        LengthPrefixedIO.writeObject(connectionRegistry.getSocket(fromSessionId), msg);
+                                    } catch (IOException e) {
+                                        throw new RuntimeException(e);
+                                    }
 
-                            }
-                    });
+                                }
+                            });
                 }
                 else{
                     invitesDao.rejectInvite(inviteId);
