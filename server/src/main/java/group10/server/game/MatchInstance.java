@@ -301,6 +301,7 @@ public class MatchInstance {
                 winnerId = null;
             }
         }
+        MatchResultHandler.updatePlayerStats(playerDao.findById(this.playerA).getUsername(), playerDao.findById(this.playerB).getUsername(), result);
         matchDao.finishMatch(this.matchId, result);
         matchDao.updatePoints(this.matchId, this.playerAScore, this.playerBScore);
         // build payload to send to both players

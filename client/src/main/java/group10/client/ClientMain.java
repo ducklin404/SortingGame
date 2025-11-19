@@ -87,7 +87,6 @@ public class ClientMain {
             router.add(ProtocolConstants.MATCH_HISTORY_DATA,
                     HistoryHandlers.historyHandler(manager));
 
-            // 🔴 ERROR
             router.add(ProtocolConstants.ERROR, (env, sock) -> {
                 System.out.println("== ERROR từ server ==");
                 System.out.println("type  : " + env.getType());
